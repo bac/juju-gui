@@ -788,16 +788,20 @@ YUI.add('juju-gui', function(Y) {
           this._disambiguateUserState(entityPromise);
         } else {
           // Drop into disconnected mode and show the profile but only if there
-          // is no state defined in root. If there is a state defined in root
-          // then we want to let that dispatcher handle the routing.
+          // is no state defined in root or store. If there is a state defined
+          // either of those then we want to let that dispatcher handle the
+          // routing.
           this.maskVisibility(false);
           const isLogin = current.root === 'login';
           const newState = {
             root: isLogin ? null : current.root,
           };
-          if ((isLogin || !current.root) && this.get('gisf')) {
-            // We only want to redirect the users to the profile page if they
-            // are in gisf(not gijoe) and root state is login.
+          // If the current root is 'login' after logging into the controller,
+          // or there is no root defined and no store defined then we want to
+          // render the users profile.
+          if (!current.store &&
+              (isLogin || !current.root) &&
+              this.get('gisf')) {
             newState.profile = this._getAuth().rootUserName;
           }
           this.state.changeState(newState);
@@ -1361,25 +1365,33 @@ YUI.add('juju-gui', function(Y) {
       @method _renderModelActions
     */
     _renderModelActions: function() {
-      const env = this.env;
+      const model = this.env;
+      const modelConnected = () => {
+        return model.get('connected') && this.get('modelUUID');
+      };
       const db = this.db;
       const utils = views.utils;
+      const modelUserInfo = model.modelUserInfo.bind(model);
+      const addNotification = db.notifications.add.bind(db.notifications);
+      const sharingVisibility = utils.sharingVisibility.bind(utils, true,
+        modelUserInfo, addNotification);
       ReactDOM.render(
         <window.juju.components.ModelActions
           acl={this.acl}
           changeState={this.state.changeState.bind(this.state)}
-          currentChangeSet={env.get('ecs').getCurrentChangeSet()}
+          currentChangeSet={model.get('ecs').getCurrentChangeSet()}
           exportEnvironmentFile={
             utils.exportEnvironmentFile.bind(utils, db,
-              env.findFacadeVersion('Application') === null)}
+              model.findFacadeVersion('Application') === null)}
           hasEntities={db.services.toArray().length > 0 ||
             db.machines.toArray().length > 0}
           hideDragOverNotification={this._hideDragOverNotification.bind(this)}
           importBundleFile={this.bundleImporter.importBundleFile.bind(
             this.bundleImporter)}
+          modelConnected={modelConnected}
           renderDragOverNotification={
             this._renderDragOverNotification.bind(this)}
-          sharingVisibility={utils.sharingVisibility.bind(utils, true)}/>,
+          sharingVisibility={sharingVisibility}/>,
         document.getElementById('model-actions-container'));
     },
 
