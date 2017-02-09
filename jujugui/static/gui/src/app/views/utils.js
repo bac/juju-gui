@@ -1409,28 +1409,17 @@ YUI.add('juju-view-utils', function(Y) {
     @method sharingVisibility
     @param {Boolean} visibility Controls whether to show (true) or hide (false);
                      defaults to true.
+    @param {Function} getModelUser The API call to list users.
+    @param {Function} addNotification The function to display user
+                      notifications.
   */
-  utils.sharingVisibility = function(visibility = true) {
+  utils.sharingVisibility = function(visibility = true, getModelUserInfo,
+    addNotification) {
     const sharing = document.getElementById('sharing-container');
-    // XXX kadams54: temporary until we wire in the actual modelUserInfo API
-    // call.
-    const getModelUserInfo = function(callback) {
-      callback(null, [{
-        name: 'drwho',
-        displayName: 'Dr. Who',
-        lastConnection: 'now',
-        access: 'admin'
-      }, {
-        name: 'dalek',
-        displayName: 'Dalek',
-        lastConnection: 'never',
-        access: 'write',
-        err: 'exterminate!'
-      }]);
-    };
     if (visibility) {
       ReactDOM.render(
         <window.juju.components.Sharing
+          addNotification={addNotification}
           getModelUserInfo={getModelUserInfo}
           closeHandler={utils.sharingVisibility.bind(utils, false)} />,
       sharing);
@@ -1523,6 +1512,16 @@ YUI.add('juju-view-utils', function(Y) {
       }
       const commit = args => {
         env.get('ecs').commit(env);
+        // After committing then update state to update the url. This is done
+        // after committing because changing state will change models and we
+        // won't have visibility on when we're connected again and can
+        // commit the changes.
+        utils._switchModel.call(app, env, {
+          id: model.uuid,
+          name: model.name,
+          owner: model.owner
+        });
+        app.hideConnectingMask();
         callback(null);
       };
       app.set('modelUUID', model.uuid);
