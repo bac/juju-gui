@@ -518,7 +518,7 @@ YUI.add('juju-gui', function(Y) {
       this.env = modelAPI;
       // Generate the application state then see if we have to disambiguate
       // the user portion of the state.
-      const pathState = this.state.generateState(window.location.href);
+      const pathState = this.state.generateState(window.location.href, false);
       let entityPromise = null;
       if (!pathState.error && pathState.state.user) {
         // If we have a user component to the state then it is ambiguous.
@@ -979,7 +979,7 @@ YUI.add('juju-gui', function(Y) {
         return controllerAPI.get('connected');
       };
       const getDischargeToken = function() {
-        return window.localStorage.getItem('discharge-token', null);
+        return window.localStorage.getItem('discharge-token');
       };
       ReactDOM.render(
         <window.juju.components.Login
@@ -1273,6 +1273,10 @@ YUI.add('juju-gui', function(Y) {
       };
       const loginToController = controllerAPI.loginWithMacaroon.bind(
         controllerAPI, this.bakeryFactory.get('juju'));
+      const getDischargeToken = function() {
+        return window.localStorage.getItem('discharge-token');
+      };
+      const webhandler = new Y.juju.environments.web.WebHandler();
       ReactDOM.render(
         <window.juju.components.DeploymentFlow
           acl={this.acl}
@@ -1298,7 +1302,9 @@ YUI.add('juju-gui', function(Y) {
             controllerAPI && controllerAPI.getCloudCredentialNames.bind(
               controllerAPI)}
           getCloudProviderDetails={utils.getCloudProviderDetails.bind(utils)}
+          getDischargeToken={getDischargeToken}
           getUserName={getUserName}
+          gisf={this.get('gisf')}
           groupedChanges={changesUtils.getGroupedChanges(currentChangeSet)}
           isLegacyJuju={this.isLegacyJuju()}
           listBudgets={this.plans.listBudgets.bind(this.plans)}
@@ -1309,6 +1315,7 @@ YUI.add('juju-gui', function(Y) {
           modelCommitted={connected}
           modelName={modelName}
           region={env.get('region')}
+          sendPost={webhandler.sendPostRequest.bind(webhandler)}
           servicesGetById={services.getById.bind(services)}
           showTerms={this.terms.showTerms.bind(this.terms)}
           updateCloudCredential={
@@ -2040,6 +2047,13 @@ YUI.add('juju-gui', function(Y) {
     _deployTarget: function(state, next) {
       const charmstore = this.get('charmstore');
       const entityId = state.special['deployTarget'];
+      // Remove the deployTarget from state so that we don't end up
+      // dispatching it again by accident.
+      this.state.changeState({
+        special: {
+          deployTarget: null
+        }
+      });
       /**
         Handles parsing and displaying the failure notification returned from
         the charmstore api.
