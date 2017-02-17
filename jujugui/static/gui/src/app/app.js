@@ -482,6 +482,9 @@ YUI.add('juju-gui', function(Y) {
         modelAPI = new environments.GoEnvironment(modelOptions);
         controllerAPI = new Y.juju.ControllerAPI(controllerOptions);
       }
+      if (this.get('gisf')) {
+        document.body.classList.add('u-is-beta');
+      }
       this._init(cfg, modelAPI, controllerAPI);
     },
 
@@ -585,11 +588,17 @@ YUI.add('juju-gui', function(Y) {
       this.env.after('login', this.onLogin, this);
 
       // Once we know about MAAS server, update the header accordingly.
-      var maasServer = this.env.get('maasServer');
-      if (maasServer === undefined) {
-        this.env.once('maasServerChange', this._onMaasServer, this);
-      } else {
+      let maasServer = this.env.get('maasServer');
+      if (!maasServer && this.controllerAPI) {
+        maasServer = this.controllerAPI.get('maasServer');
+      }
+      if (maasServer) {
         this._displayMaasLink(maasServer);
+      } else {
+        if (this.controllerAPI) {
+          this.controllerAPI.once('maasServerChange', this._onMaasServer, this);
+        }
+        this.env.once('maasServerChange', this._onMaasServer, this);
       }
 
       // Feed environment changes directly into the database.
@@ -1195,6 +1204,16 @@ YUI.add('juju-gui', function(Y) {
         document.getElementById('header-search-container'));
     },
 
+
+    _renderHeaderHelp: function() {
+      ReactDOM.render(
+        <window.juju.components.HeaderHelp
+          appState={this.state}
+          gisf={this.get('gisf')}
+          user={this._getAuth()} />,
+        document.getElementById('header-help'));
+    },
+
     /**
       Renders the notification component to the page in the designated element.
 
@@ -1281,6 +1300,9 @@ YUI.add('juju-gui', function(Y) {
       ReactDOM.render(
         <window.juju.components.DeploymentFlow
           acl={this.acl}
+          addAgreement={this.terms.addAgreement.bind(this.terms)}
+          addNotification={db.notifications.add.bind(db.notifications)}
+          applications={services.toArray()}
           changesFilterByParent={
             changesUtils.filterByParent.bind(changesUtils, currentChangeSet)}
           changeState={this.state.changeState.bind(this.state)}
@@ -1294,7 +1316,8 @@ YUI.add('juju-gui', function(Y) {
             changesUtils.generateAllChangeDescriptions.bind(
               changesUtils, services, db.units)}
           generateCloudCredentialName={utils.generateCloudCredentialName}
-          getAgreements={this.terms.getAgreements.bind(this.terms)}
+          getAgreementsByTerms={
+              this.terms.getAgreementsByTerms.bind(this.terms)}
           getAuth={this._getAuth.bind(this)}
           getCloudCredentials={
             controllerAPI && controllerAPI.getCloudCredentials.bind(
@@ -1367,30 +1390,63 @@ YUI.add('juju-gui', function(Y) {
     },
 
     /**
+      Display or hide the sharing modal.
+
+      @method _sharingVisibility
+      @param {Boolean} visibility Controls whether to show (true) or hide
+                       (false); defaults to true.
+    */
+    _sharingVisibility: function(visibility = true) {
+      // Grab app attributes for easy access.
+      const controllerAPI = this.controllerAPI;
+      const db = this.db;
+      const env = this.env;
+      // Bind required functions appropriately.
+      const getModelUserInfo = env.modelUserInfo.bind(env);
+      const addNotification = db.notifications.add.bind(db.notifications);
+      const grantAccess = controllerAPI.grantModelAccess.bind(controllerAPI,
+        env.get('modelUUID'));
+      const revokeAccess = controllerAPI.revokeModelAccess.bind(controllerAPI,
+        env.get('modelUUID'));
+      // Render or un-render the sharing component.
+      const sharing = document.getElementById('sharing-container');
+      if (visibility) {
+        ReactDOM.render(
+          <window.juju.components.Sharing
+            addNotification={addNotification}
+            canShareModel={this.acl.canShareModel()}
+            closeHandler={this._sharingVisibility.bind(this, false)}
+            getModelUserInfo={getModelUserInfo}
+            grantModelAccess={grantAccess}
+            humanizeTimestamp={views.utils.humanizeTimestamp}
+            revokeModelAccess={revokeAccess} />,
+        sharing);
+      } else {
+        ReactDOM.unmountComponentAtNode(sharing);
+      }
+    },
+
+    /**
       Renders the import and export component to the page in the
       designated element.
 
       @method _renderModelActions
     */
     _renderModelActions: function() {
-      const model = this.env;
-      const modelConnected = () => {
-        return model.get('connected') && this.get('modelUUID');
-      };
       const db = this.db;
       const utils = views.utils;
-      const modelUserInfo = model.modelUserInfo.bind(model);
-      const addNotification = db.notifications.add.bind(db.notifications);
-      const sharingVisibility = utils.sharingVisibility.bind(utils, true,
-        modelUserInfo, addNotification);
+      const env = this.env;
+      const modelConnected = () => {
+        return env.get('connected') && this.get('modelUUID');
+      };
       ReactDOM.render(
         <window.juju.components.ModelActions
           acl={this.acl}
           changeState={this.state.changeState.bind(this.state)}
-          currentChangeSet={model.get('ecs').getCurrentChangeSet()}
+          currentChangeSet={env.get('ecs').getCurrentChangeSet()}
           exportEnvironmentFile={
             utils.exportEnvironmentFile.bind(utils, db,
-              model.findFacadeVersion('Application') === null)}
+              env.findFacadeVersion('Application') === null)}
           hasEntities={db.services.toArray().length > 0 ||
             db.machines.toArray().length > 0}
           hideDragOverNotification={this._hideDragOverNotification.bind(this)}
@@ -1399,7 +1455,7 @@ YUI.add('juju-gui', function(Y) {
           modelConnected={modelConnected}
           renderDragOverNotification={
             this._renderDragOverNotification.bind(this)}
-          sharingVisibility={sharingVisibility}/>,
+          sharingVisibility={this._sharingVisibility.bind(this)}/>,
         document.getElementById('model-actions-container'));
     },
 
@@ -2748,6 +2804,10 @@ YUI.add('juju-gui', function(Y) {
       @param {Object} evt An event object (with a "newVal" attribute).
     */
     _onMaasServer: function(evt) {
+      if (evt.newVal === evt.prevVal) {
+        // This can happen if the attr is set blithely. Ignore if so.
+        return;
+      }
       this._displayMaasLink(evt.newVal);
     },
 
@@ -2851,6 +2911,7 @@ YUI.add('juju-gui', function(Y) {
       this._renderZoom();
       this._renderBreadcrumb();
       this._renderHeaderSearch();
+      this._renderHeaderHelp();
       const gui = this.state.current.gui;
       if (!gui || (gui && !gui.inspector)) {
         this._renderAddedServices();
@@ -2988,11 +3049,18 @@ YUI.add('juju-gui', function(Y) {
       if (!users) {
         return null;
       }
-      const mkUser = user => {
+      const mkUser = (user, canBeLocal) => {
+        const parts = user.split('@');
+        let usernameDisplay = user;
+        if (parts.length === 1 && canBeLocal) {
+          usernameDisplay += '@local';
+        } else if (parts.length > 1 && parts[1] === 'external') {
+          usernameDisplay = parts[0];
+        }
         return {
           user: user,
-          usernameDisplay: user,
-          rootUserName: user.split('@')[0]
+          usernameDisplay: usernameDisplay,
+          rootUserName: parts[0]
         };
       };
       let credentials;
@@ -3000,20 +3068,20 @@ YUI.add('juju-gui', function(Y) {
       if (this.env) {
         credentials = this.env.getCredentials();
         if (credentials.user) {
-          return mkUser(credentials.user);
+          return mkUser(credentials.user, true);
         }
       }
       // Try to retrieve the user from the controller connection.
       if (this.controllerAPI) {
         credentials = this.controllerAPI.getCredentials();
         if (credentials.user) {
-          return mkUser(credentials.user);
+          return mkUser(credentials.user, true);
         }
       }
       // Last chance: the charm store.
       const charmstore = users.charmstore;
       if (charmstore && charmstore.user) {
-        return mkUser(charmstore.user);
+        return mkUser(charmstore.user, false);
       }
       return null;
     },
@@ -3140,6 +3208,7 @@ YUI.add('juju-gui', function(Y) {
     'header-breadcrumb',
     'model-actions',
     'expanding-progress',
+    'header-help',
     'header-search',
     'inspector-component',
     'isv-profile',

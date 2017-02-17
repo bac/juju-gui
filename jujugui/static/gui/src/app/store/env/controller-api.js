@@ -152,6 +152,24 @@ YUI.add('juju-controller-api', function(Y) {
         }
         // Clean up for log out text.
         this.failedAuthentication = false;
+        // Retrieve maas credentials should they exist.
+        // NB: this assumes that a maas cloud cannot be added to a multi-cloud
+        // controller. If this changes in the future, this code will need to be
+        // called somewhere else. - Makyo 2017-02-16
+        this.getDefaultCloudName((error, name) => {
+          if (error) {
+            console.log('error retrieving default cloud name', error);
+            return;
+          }
+          this.getClouds([name], (error, clouds) => {
+            const err = error || clouds[name].err;
+            if (err) {
+              console.log('error retrieving cloud info', err);
+              return;
+            }
+            this.set('maasServer', clouds[name].endpoint);
+          });
+        });
       } else {
         // If the credentials were rejected remove them.
         this.setCredentials(null);
@@ -926,7 +944,7 @@ YUI.add('juju-controller-api', function(Y) {
     */
     getClouds: function(names, callback) {
       // Decorate the user supplied callback.
-      const handler = data => {
+      const handler = (data) => {
         if (!callback) {
           console.log('data returned by Cloud.Cloud API call:', data);
           return;
@@ -1267,17 +1285,17 @@ YUI.add('juju-controller-api', function(Y) {
       Modify (grant or revoke) user access to the specified model.
 
       @method _modifyModelAccess
+      @param {String} modelId The UUID for the model on which the access is
+                              being changed.
       @param {Array} users The usernames of the users who need modified access.
-      @param {String} modelId The ID for the model on which the access is being
-                              changed.
+      @param {String} action Either 'revoke' or 'grant'.
       @param {String} access The level of access to grant the users; can be
                              'read', 'write', or 'admin'.
-      @param {String} action Either 'revoke' or 'grant'.
       @param {Function} callback A callable that must be called once the
         operation is performed. It will receive an error message or null if the
         access modification succeeded.
     */
-    _modifyModelAccess: function(users, modelId, access, action, callback) {
+    _modifyModelAccess: function(modelId, users, action, access, callback) {
       // Decorate the user supplied callback.
       const handler = data => {
         if (!callback) {
@@ -1323,34 +1341,34 @@ YUI.add('juju-controller-api', function(Y) {
       Grant users access to the current model.
 
       @method grantModelAccess
+      @param {String} modelId The UUID for the model on which the access is
+                              being changed.
       @param {Array} users The usernames of the users who need modified access.
-      @param {String} modelId The ID for the model on which the access is being
-                              changed.
       @param {String} access The level of access to grant the users; can be
                              'read', 'write', or 'admin'.
       @param {Function} callback A callable that must be called once the
         operation is performed. It will receive an error message or null if the
         access grant succeeded.
     */
-    grantModelAccess: function(users, modelId, access, callback) {
-      this._modifyModelAccess(users, modelId, access, 'grant', callback);
+    grantModelAccess: function(modelId, users, access, callback) {
+      this._modifyModelAccess(modelId, users, 'grant', access, callback);
     },
 
     /**
       Revoke users access to the current model.
 
       @method revokeModelAccess
+      @param {String} modelId The UUID for the model on which the access is
+                              being changed.
       @param {Array} users The usernames of the users who need modified access.
-      @param {String} modelId The ID for the model on which the access is being
-                              changed.
       @param {String} access The level of access to grant the users; can be
                              'read', 'write', or 'admin'.
       @param {Function} callback A callable that must be called once the
         operation is performed. It will receive an error message or null if the
         access revocation succeeded.
     */
-    revokeModelAccess: function(users, modelId, access, callback) {
-      this._modifyModelAccess(users, modelId, access, 'revoke', callback);
+    revokeModelAccess: function(modelId, users, access, callback) {
+      this._modifyModelAccess(modelId, users, 'revoke', access, callback);
     }
 
   });
