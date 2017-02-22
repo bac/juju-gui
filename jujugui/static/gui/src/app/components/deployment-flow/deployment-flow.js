@@ -30,10 +30,10 @@ YUI.add('deployment-flow', function() {
       changes: React.PropTypes.object.isRequired,
       changesFilterByParent: React.PropTypes.func.isRequired,
       charmsGetById: React.PropTypes.func.isRequired,
+      charmstore: React.PropTypes.object.isRequired,
       cloud: React.PropTypes.object,
       credential: React.PropTypes.string,
       deploy: React.PropTypes.func.isRequired,
-      environment: React.PropTypes.object.isRequired,
       generateAllChangeDescriptions: React.PropTypes.func.isRequired,
       generateCloudCredentialName: React.PropTypes.func.isRequired,
       getAgreementsByTerms: React.PropTypes.func.isRequired,
@@ -55,7 +55,9 @@ YUI.add('deployment-flow', function() {
       region: React.PropTypes.string,
       sendPost: React.PropTypes.func,
       servicesGetById: React.PropTypes.func.isRequired,
+      setModelName: React.PropTypes.func.isRequired,
       showTerms: React.PropTypes.func.isRequired,
+      storeUser: React.PropTypes.func.isRequired,
       updateCloudCredential: React.PropTypes.func,
       updateModelName: React.PropTypes.func,
       withPlans: React.PropTypes.bool
@@ -569,7 +571,7 @@ YUI.add('deployment-flow', function() {
       const modelName = this.refs.modelName.getValue();
       this.setState({modelName: modelName});
       if (modelName !== '') {
-        this.props.environment.set('name', modelName);
+        this.props.setModelName(modelName);
       }
     },
 
@@ -596,30 +598,15 @@ YUI.add('deployment-flow', function() {
           <div className="six-col">
             <juju.components.USSOLoginLink
               gisf={this.props.gisf}
+              charmstore={this.props.charmstore}
               callback={callback}
               displayType={'button'}
               sendPost={this.props.sendPost}
+              storeUser={this.props.storeUser}
               getDischargeToken={this.props.getDischargeToken}
               loginToController={this.props.loginToController}/>
           </div>
         </juju.components.DeploymentSection>);
-    },
-
-    /**
-      Generate the appropriate cloud title based on the state.
-
-      @method _generateCloudTitle
-      @returns {String} The cloud title.
-    */
-    _generateCloudTitle: function() {
-      var cloud = this.state.cloud;
-      if (!cloud) {
-        return 'Choose cloud to deploy to';
-      } else if (cloud.name === 'local') {
-        return 'Local cloud';
-      } else {
-        return 'Public cloud';
-      }
     },
 
     /**
@@ -641,7 +628,7 @@ YUI.add('deployment-flow', function() {
           disabled={status.disabled}
           instance="deployment-cloud"
           showCheck={true}
-          title={this._generateCloudTitle()}>
+          title="Choose cloud to deploy to">
           <juju.components.DeploymentCloud
             acl={this.props.acl}
             cloud={cloud}
