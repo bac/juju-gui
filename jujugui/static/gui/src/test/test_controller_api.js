@@ -102,23 +102,57 @@ describe('Controller API', function() {
     });
   });
 
-  describe('close', () => {
-    it('stops the pinger', function(done) {
+  describe('lifecycle', () => {
+    beforeEach(function() {
       const originalClearInterval = clearInterval;
+      const originalSetInterval = setInterval;
       clearInterval = sinon.stub();
-      this._cleanups.push(() => {
+      setInterval = sinon.stub().returns('mypinger');
+      cleanups.push(() => {
         clearInterval = originalClearInterval;
-      });
-      controllerAPI._pinger = 'I am the pinger';
-      controllerAPI.close(() => {
-        assert.strictEqual(clearInterval.calledOnce, true);
-        const pinger = clearInterval.getCall(0).args[0];
-        assert.strictEqual(pinger, 'I am the pinger');
-        assert.strictEqual(controllerAPI._pinger, null);
-        done();
+        setInterval = originalSetInterval;
       });
     });
 
+    it('starts the pinger when the controller connects', function(done) {
+      controllerAPI.set('connected', false);
+      controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(setInterval.calledOnce, true, 'setInterval');
+        assert.strictEqual(controllerAPI._pinger, 'mypinger');
+        done();
+      });
+      controllerAPI.set('connected', true);
+    });
+
+    it('stops the pinger when the controller disconnects', function(done) {
+      controllerAPI.set('connected', true);
+      const initialPinger = controllerAPI._pinger;
+      assert.notEqual(initialPinger, null);
+      controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(clearInterval.calledOnce, true, 'clearInterval');
+        const pinger = clearInterval.getCall(0).args[0];
+        assert.strictEqual(pinger, initialPinger);
+        assert.strictEqual(controllerAPI._pinger, null);
+        done();
+      });
+      controllerAPI.set('connected', false);
+    });
+
+    it('stops the pinger when the controller is destroyed', function(done) {
+      const api = new juju.ControllerAPI({conn: conn});
+      api.after('destroy', evt => {
+        assert.strictEqual(setInterval.calledOnce, true, 'setInterval');
+        assert.strictEqual(clearInterval.calledOnce, true, 'clearInterval');
+        const pinger = clearInterval.getCall(0).args[0];
+        assert.strictEqual(pinger, 'mypinger');
+        done();
+      });
+      api.set('connected', true);
+      api.destroy();
+    });
+  });
+
+  describe('close', () => {
     it('resets attributes', done => {
       controllerAPI.setConnectedAttr('controllerAccess', 'test');
       controllerAPI.close(() => {
@@ -895,6 +929,60 @@ describe('Controller API', function() {
       // Mimic response.
       conn.msg({'request-id': 1, response: {results: []}});
     });
+
+    it('retrieves model info for a sandbox model', done => {
+      // Perform the request.
+      const id = 'sandbox1';
+      controllerAPI.modelInfo([id], (err, models) => {
+        assert.strictEqual(err, null);
+        assert.strictEqual(models.length, 1);
+        const result = models[0];
+        assert.strictEqual(result.id, id);
+        assert.strictEqual(result.name, 'sandbox');
+        assert.strictEqual(result.series, 'trusty');
+        assert.strictEqual(result.provider, 'demonstration');
+        assert.strictEqual(result.uuid, 'sandbox1');
+        assert.strictEqual(result.credential, '');
+        assert.strictEqual(result.region, null);
+        assert.strictEqual(result.cloud, '');
+        assert.strictEqual(result.numMachines, 0);
+        assert.deepEqual(result.users, []);
+        assert.strictEqual(result.life, 'alive');
+        assert.strictEqual(result.owner, 'admin@local');
+        assert.strictEqual(result.isAlive, true, 'unexpected zombie model');
+        assert.strictEqual(
+          result.isController, false, 'unexpected controller model');
+        assert.equal(conn.messages.length, 1);
+        assert.deepEqual(conn.last_message(), {
+          type: 'ModelManager',
+          version: 2,
+          request: 'ModelInfo',
+          params: {entities: [{tag: 'model-' + id}]},
+          'request-id': 1
+        });
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {
+          results: [{
+            result: {
+              'default-series': 'trusty',
+              name: 'sandbox',
+              'provider-type': 'demonstration',
+              uuid: 'sandbox1',
+              'controller-uuid': 'controlleruuid1',
+              machines: [],
+              users: [],
+              life: 'alive',
+              'owner-tag': 'user-admin@local'
+            }
+          }]
+        }
+      });
+    });
+
   });
 
   describe('listModelsWithInfo', function() {
