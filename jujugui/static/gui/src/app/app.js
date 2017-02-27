@@ -1260,16 +1260,13 @@ YUI.add('juju-gui', function(Y) {
         if (!auth) {
           return;
         }
-        this.state.changeState({
-          model: null,
-          profile: auth.rootUserName,
-          root: null,
-          store: null
-        });
+        views.utils.showProfile(
+         this.env && this.env.get('ecs'),
+         this.state.changeState.bind(this.state), auth.rootUserName);
       };
       ReactDOM.render(
         <window.juju.components.HeaderLogo
-        navigateUserProfile={navigateUserProfile} />,
+          navigateUserProfile={navigateUserProfile} />,
         document.getElementById('header-logo'));
     },
 
@@ -1780,6 +1777,7 @@ YUI.add('juju-gui', function(Y) {
           getEntity={getEntity}
           getFile={charmstore.getFile.bind(charmstore)}
           getDiagramURL={charmstore.getDiagramURL.bind(charmstore)}
+          isLegacyJuju={this.isLegacyJuju()}
           listPlansForCharm={this.plans.listPlansForCharm.bind(this.plans)}
           renderMarkdown={marked.bind(this)}
           deployService={this.deployService.bind(this)}
