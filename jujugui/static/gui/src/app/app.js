@@ -1764,6 +1764,7 @@ YUI.add('juju-gui', function(Y) {
         }
         charmstore.getEntity(url.legacyPath(), callback);
       };
+      const getModelName = () => this.env.get('environmentName');
       ReactDOM.render(
         <window.juju.components.Charmbrowser
           acl={this.acl}
@@ -1777,6 +1778,7 @@ YUI.add('juju-gui', function(Y) {
           getEntity={getEntity}
           getFile={charmstore.getFile.bind(charmstore)}
           getDiagramURL={charmstore.getDiagramURL.bind(charmstore)}
+          getModelName={getModelName}
           isLegacyJuju={this.isLegacyJuju()}
           listPlansForCharm={this.plans.listPlansForCharm.bind(this.plans)}
           renderMarkdown={marked.bind(this)}
@@ -2137,7 +2139,13 @@ YUI.add('juju-gui', function(Y) {
           if (this.env.get('connected')) {
             this._switchModelToUUID();
           }
-          this.maskVisibility(false);
+          // When dispatching, we only want to remove the mask if we're in
+          // anonymousMode or the user is logged in; otherwise we need to
+          // properly redirect to login.
+          const userLoggedIn = this.controllerAPI.userIsAuthenticated;
+          if (this.anonymousMode || userLoggedIn) {
+            this.maskVisibility(false);
+          }
           break;
         default:
           next();
