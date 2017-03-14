@@ -479,4 +479,63 @@ describe('DeploymentCredential', function() {
       </div>);
     assert.deepEqual(output, expected);
   });
+
+  it('clears the credential when displaying the form', function() {
+    var updateCloudCredential = sinon.stub();
+    var setCredential = sinon.stub();
+    var setRegion = sinon.stub();
+    var validateForm = sinon.stub();
+    const getCloudProviderDetails = sinon.stub();
+    const generateCloudCredentialName = sinon.stub();
+    var renderer = jsTestUtils.shallowRender(
+      <juju.components.DeploymentCredential
+        acl={acl}
+        updateCloudCredential={updateCloudCredential}
+        cloud={cloud}
+        editable={true}
+        generateCloudCredentialName={generateCloudCredentialName}
+        getCloudCredentials={sinon.stub().callsArgWith(1, null, credentials)}
+        getCloudCredentialNames={
+          sinon.stub().callsArgWith(1, null, tags)}
+        getCloudProviderDetails={getCloudProviderDetails}
+        setCredential={setCredential}
+        setRegion={setRegion}
+        user={user}
+        validateForm={validateForm} />, true);
+    var instance = renderer.getMountedInstance();
+    instance._handleCredentialChange('add-credential');
+    assert.equal(setCredential.callCount, 2);
+    assert.equal(setCredential.args[1][0], null);
+  });
+
+  it('restores the credential when canceling the form', function() {
+    const setCredential = sinon.stub();
+    const credential = 'test-credential';
+    const renderer = jsTestUtils.shallowRender(
+      <juju.components.DeploymentCredential
+        acl={acl}
+        updateCloudCredential={sinon.stub()}
+        cloud={cloud}
+        credential={credential}
+        editable={true}
+        generateCloudCredentialName={sinon.stub()}
+        getCloudCredentials={sinon.stub().callsArgWith(1, null, credentials)}
+        getCloudCredentialNames={
+          sinon.stub().callsArgWith(1, null, tags)}
+        getCloudProviderDetails={sinon.stub()}
+        setCredential={setCredential}
+        setRegion={sinon.stub()}
+        user={user}
+        validateForm={sinon.stub()} />, true);
+    const instance = renderer.getMountedInstance();
+    // Show add credential form...
+    instance._toggleAdd();
+    assert.equal(instance.state.savedCredential, credential);
+    // Reset our counters...
+    setCredential.reset();
+    // Then hide it as a cancel.
+    instance._toggleAdd(true);
+    assert.equal(setCredential.callCount, 1);
+    assert.equal(setCredential.args[0][0], credential);
+  });
 });

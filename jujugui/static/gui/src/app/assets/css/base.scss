@@ -6,7 +6,7 @@ $font-family-mono: 'Ubuntu Mono', 'Bitstream Vera Sans Mono', 'Courier New', Cou
 $light-grey: #f7f7f7;
 $light-mid-grey: #d4d4d4;
 $dark-grey: #9fa7aa;
-$warm-grey: #666;
+$dark-warm-grey: #666;
 
 // Status colours.
 $uncommitted: #19b6ee;
@@ -16,6 +16,7 @@ $service-uncommitted: $uncommitted;
 
 // Brand colours.
 $ubuntu-orange: #dd4814;
+$link-blue: #007aa6;
 
 // Other colours.
 $canvas-background: $light-grey;
@@ -89,7 +90,7 @@ $asset-path: 'static/gui/build/app/assets/';
 @import 'generic';
 @import 'header';
 @import 'loading';
-@import 'shortcuts';
+@import 'modal';
 @import 'tooltip';
 @import 'cookies';
 @import 'components';
@@ -140,6 +141,8 @@ $asset-path: 'static/gui/build/app/assets/';
 
 @import 'plugins/prism';
 @import 'plugins/prism-overrides';
+
+@import 'beta';
 
 // Mobile styles
 @import 'mobile';

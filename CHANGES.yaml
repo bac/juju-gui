@@ -1,3 +1,69 @@
+- 2.4.3:
+
+    - (Fix) Header links now correctly show the appropriate user profiles.
+    - (Fix) Adding Google Cloud credentials json file now is stored correctly.
+    - (Fix) Config options set to "" will no longer 'unset' the value in Juju.
+    - (Fix) Bundle and charm details now have proper homepage and bug links.
+    - (Fix) Display modified configuration options on bundle details pages.
+    - (Fix) No longer repeating user name in user profile.
+    - (Fix) Cookie notice no longer blocks deploy button.
+
+- 2.4.2:
+
+    ->
+      (Fix) Prior to logging in, if the GUI loses connection to the controller
+      it will no longer force a login.
+    ->
+      (Fix) Clicking the log in button on the canvas now correctly automatically
+      logs you into the charmstore.
+
+- 2.4.1:
+
+    - Clicking the Juju logo now takes you to your profile.
+    - Automatically log into the charmstore when logging in on hosted Juju.
+    ->
+      (Fix) Visiting another user or group's profile page now properly displays
+      their profile.
+    - (Fix) Model name is now properly synced throughout the UI.
+    - (Fix) Close the search results when clicking outside.
+    - (Fix) Display the proper cloud title after selecting a cloud.
+    - (Fix) Long charm/bundle names now properly wrap.
+
+- 2.4.0:
+
+    ->
+      Sharing interface now allows you to grant and revoke permissions of
+      users on a per model basis.
+    ->
+      Charm terms are now shown in the deployment flow and any charms with
+      terms now require those terms to be agreed to before deploying.
+    - Added help button to header for links to documentation and shortcuts.
+    - (Fix) Charmstore now uses the new URL scheme.
+    - (Fix) SSH Key input field is now styled properly in Firefox/Safari.
+
+- 2.3.0:
+
+    - New, easy to share URL scheme.
+    - New application state system.
+    ->
+      New Sharing interface which shows which users currently have access to
+      the active model.
+    - Model exports now include uncommitted changes.
+    - Deployment Flow now allows you to add custom SSH keys.
+    - Model switcher now shows the model owner's name if not the logged in user.
+    - Alpha support for remote applications.
+    - (Fix) When scaling units, correctly increment the unit id.
+    - (Fix) Inspector configuration input heights are now set properly.
+    - (Fix) Properly handle regions in MAAS.
+    - (Fix) Improved validation on required deployment fields.
+    - (Fix) Invalid required fields will now block deployment.
+    - (Fix) Model name changes are now synced throughout the UI.
+    - (Fix) Hide inactive Deployment Flow components until they are needed.
+    - (Fix) Show file drop message even if there are matching applications.
+    - (Fix) Drag and drop of external charm/bundle files now works in Safari.
+    - (Fix) Fetch bundle details when viewing the GUI anonymously.
+    - (Fix) Azure credentials now use the same fields as Juju.
+
 - 2.2.7:
 
     - (Fix) Correctly clear cookies when visiting from the storefront.

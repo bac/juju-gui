@@ -23,11 +23,13 @@ YUI.add('generic-button', function() {
   juju.components.GenericButton = React.createClass({
     propTypes: {
       action: React.PropTypes.func,
+      children: React.PropTypes.node,
       disabled: React.PropTypes.bool,
       extraClasses: React.PropTypes.string,
       icon: React.PropTypes.string,
       submit: React.PropTypes.bool,
       title: React.PropTypes.string,
+      tooltip: React.PropTypes.string,
       type: React.PropTypes.string
     },
 
@@ -71,20 +73,26 @@ YUI.add('generic-button', function() {
       @method _generateContent
     */
     _generateContent: function() {
-      var title = this.props.title;
-      var icon = this.props.icon;
-      if (title) {
-        return title;
-      } else if (icon) {
-        return (
-          <juju.components.SvgIcon name={icon}
-            size="16" />);
+      // If children are present, the title and icon props are ignored.
+      if (this.props.children) {
+        return this.props.children;
+      } else {
+        var title = this.props.title;
+        var icon = this.props.icon;
+        if (title) {
+          return title;
+        } else if (icon) {
+          return (
+            <juju.components.SvgIcon name={icon}
+              size="16" />);
+        }
       }
     },
 
     render: function() {
       return (
         <button className={this._generateClasses()}
+          title={this.props.tooltip}
           onClick={this._handleClick}
           type={this.props.submit ? 'submit' : 'button'}>
           {this._generateContent()}

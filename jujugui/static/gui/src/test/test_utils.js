@@ -422,10 +422,16 @@ describe('utilities', function() {
             case 'units':
               returnVal = {
                 size: function() { return 2; },
-                toArray: function() { return [
-                  {id: applicationName + '/1'},
-                  {id: applicationName + '/2'}
-                ]; }};
+                toArray: function() {
+                  if (applicationName === 'no-units') {
+                    return [];
+                  }
+                  return [
+                    {id: applicationName + '/1'},
+                    {id: applicationName + '/2'}
+                  ];
+                }
+              };
               break;
             case 'displayName':
               if (applicationName.indexOf('$') > 0) {
@@ -462,15 +468,19 @@ describe('utilities', function() {
       // The numbers for the id's are important. The mocks have existing units
       // having indexes of 1 and 2. There was a bug where the next value wasn't
       // being properly computed when there was no 0 unit.
+      let firstIndex = 3;
+      if (applicationName === 'no-units') {
+        firstIndex = 0;
+      }
       assert.deepEqual(addUnitsArgs[0][0], {
-        id: applicationName + '/' + 3,
-        displayName: applicationName + '/' + 3,
+        id: applicationName + '/' + firstIndex,
+        displayName: applicationName + '/' + firstIndex,
         charmUrl: 'I am a charm url',
         subordinate: false
       }, 'addUnits first not called with proper data');
       assert.deepEqual(addUnitsArgs[1][0], {
-        id: applicationName + '/' + 4,
-        displayName: applicationName + '/' + 4,
+        id: applicationName + '/' + (firstIndex+1),
+        displayName: applicationName + '/' + (firstIndex+1),
         charmUrl: 'I am a charm url',
         subordinate: false
       }, 'addUnits second not called with proper data');
@@ -482,14 +492,14 @@ describe('utilities', function() {
       assert.strictEqual(add_unit_args[0][2], null);
       assert.equal(typeof add_unit_args[0][3], 'function');
       assert.deepEqual(add_unit_args[0][4], {
-        modelId: applicationName + '/' + 3
+        modelId: applicationName + '/' + firstIndex
       });
       assert.equal(add_unit_args[1][0], applicationName);
       assert.equal(add_unit_args[1][1], 1);
       assert.strictEqual(add_unit_args[1][2], null);
       assert.equal(typeof add_unit_args[1][3], 'function');
       assert.deepEqual(add_unit_args[1][4], {
-        modelId: applicationName + '/' + 4
+        modelId: applicationName + '/' + (firstIndex+1)
       });
       assert.equal(units.length, 2);
     }
@@ -497,6 +507,12 @@ describe('utilities', function() {
     it('creates machines, units; places units; updates unit lists',
        function() {
          testScaleUp('myService');
+       }
+    );
+
+    it('creates machines, units; places units; updates unit lists (no units)',
+       function() {
+         testScaleUp('no-units');
        }
     );
 
@@ -1019,7 +1035,8 @@ describe('utilities', function() {
       assert.deepEqual(changeState.lastCall.args[0], {
         profile: 'spinach',
         model: null,
-        root: null
+        root: null,
+        store: null
       });
       assert.deepEqual(utils._hidePopup.callCount, 1);
       assert.deepEqual(ecs.clear.callCount, 1);
@@ -1230,34 +1247,6 @@ describe('utilities', function() {
     it('can get details for a provider', function() {
       const provider = utils.getCloudProviderDetails('gce');
       assert.equal(provider.id, 'google');
-    });
-  });
-
-  describe('sharingVisibility', function() {
-    let utils;
-
-    before((done) => {
-      YUI(GlobalConfig).use('juju-view-utils', function(Y) {
-        utils = Y.namespace('juju.views.utils');
-        done();
-      });
-    });
-
-    it('can render the sharing component', () => {
-      const render = sinon.stub(ReactDOM, 'render');
-      utils.sharingVisibility(true);
-      // It would be nice if we could assert against expected JSX; however,
-      // since the "old" js files aren't run through a JSX transform, we have
-      // to limit ourselves to asserting on call count.
-      assert.equal(render.callCount, 1);
-      render.restore();
-    });
-
-    it('can unmount the sharing component', () => {
-      const unmount = sinon.stub(ReactDOM, 'unmountComponentAtNode');
-      utils.sharingVisibility(false);
-      assert.equal(unmount.callCount, 1);
-      unmount.restore();
     });
   });
 })();

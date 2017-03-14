@@ -35,11 +35,14 @@ YUI.add('charmbrowser-component', function() {
       getDiagramURL: React.PropTypes.func.isRequired,
       getEntity: React.PropTypes.func.isRequired,
       getFile: React.PropTypes.func.isRequired,
+      getModelName: React.PropTypes.func.isRequired,
       importBundleYAML: React.PropTypes.func.isRequired,
+      isLegacyJuju: React.PropTypes.bool,
       listPlansForCharm: React.PropTypes.func.isRequired,
       makeEntityModel: React.PropTypes.func.isRequired,
       renderMarkdown: React.PropTypes.func.isRequired,
       series: React.PropTypes.object.isRequired,
+      setPageTitle: React.PropTypes.func.isRequired,
       staticURL: React.PropTypes.string,
       utils: React.PropTypes.object.isRequired
     },
@@ -85,6 +88,7 @@ YUI.add('charmbrowser-component', function() {
     _close: function() {
       this.props.appState.changeState({
         root: null,
+        search: null,
         store: null
       });
     },
@@ -170,14 +174,17 @@ YUI.add('charmbrowser-component', function() {
                 getBundleYAML={this.props.getBundleYAML}
                 getEntity={this.props.getEntity}
                 getDiagramURL={this.props.getDiagramURL}
+                getModelName={this.props.getModelName}
                 deployService={this.props.deployService}
                 getFile={this.props.getFile}
                 scrollPosition={this.state.scrollPosition}
                 renderMarkdown={this.props.renderMarkdown}
                 id={currentState.store || `~${currentState.user}`}
+                isLegacyJuju={this.props.isLegacyJuju}
                 pluralize={utils.pluralize}
                 listPlansForCharm={this.props.listPlansForCharm}
-                makeEntityModel={this.props.makeEntityModel} />
+                makeEntityModel={this.props.makeEntityModel}
+                setPageTitle={this.props.setPageTitle} />
           );
           break;
       }

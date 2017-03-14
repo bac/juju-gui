@@ -36,6 +36,10 @@
   &__deploy {
     &-option {
       margin-bottom: 20px;
+
+      &--disabled {
+        opacity: 0.5;
+      }
     }
 
     &-checkbox {
@@ -55,6 +59,34 @@
         padding-top: 20px;
         padding-bottom: 20px;
       }
+    }
+  }
+}
+
+.deployment-login {
+  &__intro {
+    margin-top: 20px;
+  }
+
+  &__features {
+    margin-top: 20px;
+  }
+
+  &__feature {
+    margin-bottom: 20px;
+
+    .svg-icon {
+      margin-right: 1em;
+    }
+  }
+
+  &__signup {
+    margin-top: 20px;
+    text-align: center;
+
+    .usso-login {
+      display: inline;
+      margin-left: 0.5em;
     }
   }
 }

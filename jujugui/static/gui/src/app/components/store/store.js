@@ -36,8 +36,8 @@ YUI.add('store', function() {
       @return {String} A path to the local asset
     */
     _generateLocalImagePath: function(filename) {
-      var staticURL = this.props.staticURL || '';
-      var basePath = `${staticURL}/static/gui/build/app/assets/images/store/`;
+      const staticURL = this.props.staticURL || '';
+      const basePath = `${staticURL}/static/gui/build/app/assets/images/store/`;
       return basePath + filename;
     },
 
@@ -49,8 +49,8 @@ YUI.add('store', function() {
       @return {String} A URL to the entity icon
     */
     _generateIconPath: function(entityName) {
-      var charmstoreURL = this.props.charmstoreURL;
-      var apiVersion = this.props.apiVersion;
+      const charmstoreURL = this.props.charmstoreURL;
+      const apiVersion = this.props.apiVersion;
       return `${charmstoreURL}${apiVersion}/${entityName}/icon.svg`;
     },
 
@@ -62,8 +62,8 @@ YUI.add('store', function() {
       @return {String} A URL to the bundles diagram
     */
     _generateDiagramPath: function(entityName) {
-      var charmstoreURL = this.props.charmstoreURL;
-      var apiVersion = this.props.apiVersion;
+      const charmstoreURL = this.props.charmstoreURL;
+      const apiVersion = this.props.apiVersion;
       return `${charmstoreURL}${apiVersion}/bundle/${entityName}/diagram.svg`;
     },
 
@@ -149,6 +149,7 @@ YUI.add('store', function() {
                   private, or share them back with the community.</p>
                   <p>
                   <a target="_blank"
+                    className="link"
                     href={doc}>
                     Learn more about writing charms&nbsp;&rsaquo;
                   </a></p>
@@ -287,7 +288,8 @@ YUI.add('store', function() {
       ];
       var list = [];
       topics.forEach(function(topic, index) {
-        var key = `tagItem-${index}`;
+        let key = `tagItem-${index}`;
+        let comma = index === topics.length - 1 ? '' : ',';
         list.push(<li className="inline-list__item" key={key}>
             <span onClick={this._handleSearchClick}
                 data-filterkey="tags"
@@ -295,7 +297,8 @@ YUI.add('store', function() {
                 className="link">
                 {topic.name}
             </span>
-            <span className="note">({topic.count})</span>,
+            <span className="note">({topic.count})</span>
+            {comma}
         </li>);
       }, this);
       return (<div className="eight-col prepend-two align-center">
@@ -376,6 +379,7 @@ YUI.add('store', function() {
                     <h3>Nagios</h3>
                     <p>
                         By <a href={this._generateUserPath('charmers')}
+                            className="link"
                             target="_blank">
                             charmers
                         </a>
@@ -451,7 +455,7 @@ YUI.add('store', function() {
                 </li>
                 <li className="three-col last-col featured-entity">
                     <span className="featured-entity__link link"
-                        data-entity="~canonical-bootstack/prometheus"
+                        data-entity="u/canonical-bootstack/prometheus"
                         onClick={this._handleEntityClick}>
                         <div className="one-col no-margin-bottom">
                             <img
@@ -527,7 +531,7 @@ YUI.add('store', function() {
                 </li>
                 <li className="three-col last-col featured-entity">
                     <span className="featured-entity__link link"
-                        data-entity="~ricardokirkner/sentry"
+                        data-entity="u/ricardokirkner/sentry"
                         onClick={this._handleEntityClick}>
                         <div className="one-col no-margin-bottom">
                             <img src={this._generateIconPath(
@@ -612,6 +616,7 @@ YUI.add('store', function() {
                 <div className="six-col no-margin-bottom last-col">
                     <h3>Realtime Syslog Analytics</h3>
                     <p>By <a href={this._generateUserPath('bigdata-charmers')}
+                            className="link"
                             target="_blank">
                             bigdata-charmers
                         </a>
@@ -729,7 +734,7 @@ YUI.add('store', function() {
                 </li>
                 <li className="three-col featured-entity">
                     <span className="featured-entity__link link"
-                        data-entity="~containers/elk-stack"
+                        data-entity="u/containers/elk-stack"
                         onClick={this._handleEntityClick}>
                         <ul className="featured-entity__image-list one-col">
                             <li className="featured-entity__image-list-item">
@@ -797,6 +802,7 @@ YUI.add('store', function() {
                 <div className="six-col no-margin-bottom last-col">
                     <h3>MySQL</h3>
                     <p>By <a href={this._generateUserPath('mysql-charmers')}
+                            className="link"
                             target="_blank">
                             mysql-charmers
                         </a>

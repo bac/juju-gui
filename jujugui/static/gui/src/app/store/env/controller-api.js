@@ -39,18 +39,40 @@ YUI.add('juju-controller-api', function(Y) {
   Y.extend(ControllerAPI, module.BaseEnvironment, {
 
     /**
-     * Go environment constructor.
-     *
-     * @method initializer
-     * @return {undefined} Nothing.
-     */
+      Juju controller API client constructor.
+
+      @method initializer
+    */
     initializer: function() {
       // Define the default user name for this environment. It will appear as
       // predefined value in the login mask.
       this.defaultUser = 'admin';
-      this._pinger = null;
       // pendingLoginResponse is set to true when the login process is running.
       this.pendingLoginResponse = false;
+
+      this._pinger = null;
+      this.after('connectedChange', evt => {
+        if (evt.newVal) {
+          console.log('starting controller pinger');
+          this._pinger = setInterval(
+            this.ping.bind(this), module.PING_INTERVAL * 1000);
+          return;
+        }
+        console.log('stopping controller pinger');
+        clearInterval(this._pinger);
+        this._pinger = null;
+      });
+    },
+
+    /**
+      Juju controller API client destructor.
+
+      @method destructor
+    */
+    destructor: function() {
+      if (this._pinger) {
+        clearInterval(this._pinger);
+      }
     },
 
     /**
@@ -89,6 +111,13 @@ YUI.add('juju-controller-api', function(Y) {
       var version = op.version;
       if (facade !== 'Admin') {
         version = this.findFacadeVersion(facade, version);
+      }
+      if (version === null && facade === 'Pinger') {
+        // Note that, even if we don't have an available Pinger (which can
+        // happen for instance if the user is not logged in yet) we still need
+        // to ping, in order to avoid disconnections. We don't really care if
+        // the server returns an error: an error it is still WebSocket traffic.
+        version = 1;
       }
       if (version === null) {
         var err = 'api client: operation not supported: ' + JSON.stringify(op);
@@ -143,15 +172,29 @@ YUI.add('juju-controller-api', function(Y) {
         this.setConnectedAttr(
           'controllerId',
           tags.parse(tags.CONTROLLER, response['controller-tag']));
-        // Start pinging the server.
-        // XXX frankban: this is only required as a temporary workaround to
-        // prevent Apache to disconnect the WebSocket in the embedded Juju.
-        if (!this._pinger) {
-          this._pinger = setInterval(
-            this.ping.bind(this), module.PING_INTERVAL * 1000);
-        }
         // Clean up for log out text.
         this.failedAuthentication = false;
+        // Retrieve maas credentials should they exist.
+        // NB: this assumes that a maas cloud cannot be added to a multi-cloud
+        // controller. If this changes in the future, this code will need to be
+        // called somewhere else. - Makyo 2017-02-16
+        this.getDefaultCloudName((error, name) => {
+          if (error) {
+            console.log('cannot retrieve default cloud name:', error);
+            return;
+          }
+          if (name !== 'maas') {
+            return;
+          }
+          this.getClouds([name], (error, clouds) => {
+            const err = error || clouds[name].err;
+            if (err) {
+              console.log('cannot retrieve cloud info:', err);
+              return;
+            }
+            this.set('maasServer', clouds[name].endpoint);
+          });
+        });
       } else {
         // If the credentials were rejected remove them.
         this.setCredentials(null);
@@ -330,10 +373,6 @@ YUI.add('juju-controller-api', function(Y) {
     */
     cleanup: function(done) {
       console.log('cleaning up the controller API connection');
-      if (this._pinger) {
-        clearInterval(this._pinger);
-        this._pinger = null;
-      }
       this.resetConnectedAttrs();
       done();
     },
@@ -434,6 +473,20 @@ YUI.add('juju-controller-api', function(Y) {
         - uuid: the model unique identifier (usually the same as id);
         - controllerUUID: the corresponding controller unique identifier;
         - owner: the name of the user owning the model;
+        - credential: the name of the credential used to create the model;
+        - region: the model region (or null if no regions apply);
+        - cloud: the cloud used to deploy the model, as a string;
+        - numMachines: the number of machines in the model;
+        - users: a list of users with access to the model, in which each user
+          is an object with the following fields:
+          - name: the username like "who@external" or "admin";
+          - displayName: the user's display name, without the "@" part;
+          - domain: the user domain, like "local" or "Ubuntu SSO";
+          - lastConnection: the last time the user connected to the model as a
+            Date object, or null if the user has never connected;
+          - access: the type of access the user has as a string, like "read" or
+            "admin";
+          - err: a message describing a specific user error, or undefined;
         - life: the lifecycle status of the model: "alive", "dying" or "dead";
         - isAlive: whether the model is alive or dying/dead;
         - isController: whether the model is a controller model;
@@ -464,6 +517,40 @@ YUI.add('juju-controller-api', function(Y) {
             return {id: id, err: err};
           }
           result = result.result;
+          let credential = '';
+          const credentialTag = result['cloud-credential-tag'];
+          if (credentialTag) {
+            credential = tags.parse(tags.CREDENTIAL, credentialTag);
+          }
+          const machines = result.machines || [];
+          const users = (result.users || []).map(userResult => {
+            const err = userResult.error;
+            if (err) {
+              return {err: err.message};
+            }
+            let fullName = userResult.user;
+            const parts = fullName.split('@');
+            let domain = 'local';
+            if (parts.length === 2) {
+              domain = parts[1] === 'external' ? 'Ubuntu SSO' : parts[1];
+            } else {
+              fullName = parts[0] + '@' + domain;
+            }
+            const displayName = userResult['display-name'] || parts[0];
+            let lastConnection = null;
+            if (userResult['last-connection']) {
+              lastConnection = new Date(userResult['last-connection']);
+            }
+            return {
+              name: fullName,
+              displayName: displayName,
+              domain: domain,
+              lastConnection: lastConnection,
+              access: userResult.access
+            };
+          });
+          const cloudTag = result['cloud-tag'];
+          const cloud = cloudTag ? tags.parse(tags.CLOUD, cloudTag) : '';
           return {
             id: id,
             name: result.name,
@@ -472,6 +559,11 @@ YUI.add('juju-controller-api', function(Y) {
             uuid: result.uuid,
             controllerUUID: result['controller-uuid'],
             owner: tags.parse(tags.USER, result['owner-tag']),
+            credential: credential,
+            region: result['cloud-region'] || null,
+            cloud: cloud,
+            numMachines: machines.length,
+            users: users,
             life: result.life,
             isAlive: result.life === 'alive',
             isController: result.name === 'controller'
@@ -509,11 +601,25 @@ YUI.add('juju-controller-api', function(Y) {
         - uuid: the model unique identifier (usually the same as id);
         - controllerUUID: the corresponding controller unique identifier;
         - owner: the name of the user owning the model;
+        - credential: the name of the credential used to create the model;
+        - region: the model region (or null if no regions apply);
+        - cloud: the cloud used to deploy the model, as a string;
+        - numMachines: the number of machines in the model;
+        - users: a list of users with access to the model, in which each user
+          is an object with the following fields:
+          - name: the username like "who@external" or "admin";
+          - displayName: the user's display name, without the "@" part;
+          - domain: the user domain, like "local" or "Ubuntu SSO";
+          - lastConnection: the last time the user connected to the model as a
+            Date object, or null if the user has never connected;
+          - access: the type of access the user has as a string, like "read" or
+            "admin";
+          - err: a message describing a specific user error, or undefined;
         - life: the lifecycle status of the model: "alive", "dying" or "dead";
         - isAlive: whether the model is alive or dying/dead;
         - isController: whether the model is a controller model;
-        - lastConnection: the date of the last connection as a string, e.g.:
-          '2015-09-24T10:08:50Z' or null if the model was never connected to;
+        - lastConnection: the date of the last connection of the current user
+          as a Date object, or null if the model was never connected to;
         - err: a message describing a specific model error, or undefined.
       @return {undefined} Sends a message to the server only.
     */
@@ -547,9 +653,17 @@ YUI.add('juju-controller-api', function(Y) {
             callback(err, []);
             return;
           }
-          const models = infoModels.map((model, index) => {
+          const models = infoModels.map(model => {
             if (model.err) {
               return {id: model.id, err: model.err};
+            }
+            let lastConnection = null;
+            for (let i = 0; i < model.users.length; i++) {
+              const user =  model.users[i];
+              if (user.name === credentials.user) {
+                lastConnection = user.lastConnection;
+                break;
+              }
             }
             return {
               id: model.id,
@@ -559,10 +673,15 @@ YUI.add('juju-controller-api', function(Y) {
               uuid: model.uuid,
               controllerUUID: model.controllerUUID,
               owner: model.owner,
+              credential: model.credential,
+              region: model.region,
+              cloud: model.cloud,
+              numMachines: model.numMachines,
+              users: model.users,
               life: model.life,
               isAlive: model.isAlive,
               isController: model.isController,
-              lastConnection: listedModels[index].lastConnection
+              lastConnection: lastConnection
             };
           });
           callback(null, models);
@@ -848,7 +967,7 @@ YUI.add('juju-controller-api', function(Y) {
     */
     getClouds: function(names, callback) {
       // Decorate the user supplied callback.
-      const handler = data => {
+      const handler = (data) => {
         if (!callback) {
           console.log('data returned by Cloud.Cloud API call:', data);
           return;
@@ -1183,6 +1302,96 @@ YUI.add('juju-controller-api', function(Y) {
         request: 'RevokeCredentials',
         params: {entities: [{tag: tags.build(tags.CREDENTIAL, name)}]}
       }, handler);
+    },
+
+    /**
+      Modify (grant or revoke) user access to the specified model.
+
+      @method _modifyModelAccess
+      @param {String} modelId The UUID for the model on which the access is
+                              being changed.
+      @param {Array} users The usernames of the users who need modified access.
+      @param {String} action Either 'revoke' or 'grant'.
+      @param {String} access The level of access to grant the users; can be
+                             'read', 'write', or 'admin'.
+      @param {Function} callback A callable that must be called once the
+        operation is performed. It will receive an error message or null if the
+        access modification succeeded.
+    */
+    _modifyModelAccess: function(modelId, users, action, access, callback) {
+      // Decorate the user supplied callback.
+      const handler = data => {
+        if (!callback) {
+          console.log(
+            'Data returned by ModelManager.ModifyModelAccess API call:', data);
+          return;
+        }
+        if (data.error) {
+          callback(data.error);
+          return;
+        }
+        const results = data.response.results;
+        if (!results || results.length !== 1) {
+          // This should never happen.
+          callback('invalid results from Juju: ' + JSON.stringify(results));
+          return;
+        }
+        const err = results[0].error && results[0].error.message;
+        if (err) {
+          callback(err);
+          return;
+        }
+        callback(null);
+      };
+      const modelTag = tags.build(tags.MODEL, modelId);
+      const changes = users.map(username => {
+        return {
+          access: access,
+          action: action,
+          'model-tag': modelTag,
+          'user-tag': tags.build(tags.USER, username)
+        };
+      });
+      // Send the API request.
+      this._send_rpc({
+        type: 'ModelManager',
+        request: 'ModifyModelAccess',
+        params: {changes: changes}
+      }, handler);
+    },
+
+    /**
+      Grant users access to the current model.
+
+      @method grantModelAccess
+      @param {String} modelId The UUID for the model on which the access is
+                              being changed.
+      @param {Array} users The usernames of the users who need modified access.
+      @param {String} access The level of access to grant the users; can be
+                             'read', 'write', or 'admin'.
+      @param {Function} callback A callable that must be called once the
+        operation is performed. It will receive an error message or null if the
+        access grant succeeded.
+    */
+    grantModelAccess: function(modelId, users, access, callback) {
+      this._modifyModelAccess(modelId, users, 'grant', access, callback);
+    },
+
+    /**
+      Revoke users access to the current model.
+
+      @method revokeModelAccess
+      @param {String} modelId The UUID for the model on which the access is
+                              being changed.
+      @param {Array} users The usernames of the users who need modified access.
+      @param {String} access The level of access to grant the users; can be
+                             'read', 'write', or 'admin'.
+      @param {Function} callback A callable that must be called once the
+        operation is performed. It will receive an error message or null if the
+        access revocation succeeded.
+    */
+    revokeModelAccess: function(modelId, users, access, callback) {
+      this._modifyModelAccess(modelId, users, 'revoke', access, callback);
     }
 
   });

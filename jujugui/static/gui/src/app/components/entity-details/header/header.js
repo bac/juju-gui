@@ -29,6 +29,7 @@ YUI.add('entity-header', function() {
       deployService: React.PropTypes.func.isRequired,
       entityModel: React.PropTypes.object.isRequired,
       getBundleYAML: React.PropTypes.func.isRequired,
+      getModelName: React.PropTypes.func.isRequired,
       hasPlans: React.PropTypes.bool.isRequired,
       importBundleYAML: React.PropTypes.func.isRequired,
       plans: React.PropTypes.array,
@@ -172,10 +173,11 @@ YUI.add('entity-header', function() {
       @method _generateDeployAction
     */
     _generateDeployAction: function() {
-      var entity = this.props.entityModel.toEntity();
-      var deployAction;
+      const entity = this.props.entityModel.toEntity();
+      let deployAction;
       // If the entity is not a charm OR it is a charm and has the series set,
       // display a button. Otherwise display a "not supported" message.
+      const title = `Add to ${this.props.getModelName() || 'model'}`;
       if (entity.type !== 'charm' || entity.series) {
         deployAction = (
           <juju.components.GenericButton
@@ -183,7 +185,7 @@ YUI.add('entity-header', function() {
             action={this._handleDeployClick}
             disabled={this.props.acl.isReadOnly()}
             type="positive"
-            title="Add to canvas" />
+            title={title} />
         );
       } else {
         deployAction = (
@@ -257,6 +259,39 @@ YUI.add('entity-header', function() {
     },
 
     /**
+     When the latest version link is click, go to that version.
+   */
+    _handleRevisionClick: function(evt) {
+      evt.stopPropagation();
+      this.props.changeState({
+        search: null,
+        store: this.props.entityModel.get('latest_revision').url
+      });
+    },
+
+    /**
+      Generates the list item to link to the latest version
+      or display the latest version
+   */
+    _generateLatestRevision: function() {
+      const entityModel = this.props.entityModel;
+      const latest_revision = entityModel.get('latest_revision');
+      const revision_id = entityModel.get('revision_id');
+
+      if (latest_revision.id !== revision_id) {
+        return (<li>
+          <a className="link" onClick={this._handleRevisionClick}>
+            Latest version (#{latest_revision.id})
+          </a>
+        </li>);
+      } else {
+        return (<li>
+          Latest version (#{latest_revision.id})
+        </li>);
+      }
+    },
+
+    /**
       Generates the list of series. Supports bundles, multi-series and
       single-series charms.
 
@@ -298,14 +333,18 @@ YUI.add('entity-header', function() {
                   className="entity-header__title"
                   itemProp="name"
                   ref="entityHeaderTitle">
-                  {entity.displayName}
+                  {entity.displayName}{' '}
+                  <span className="entity-header__version">
+                    #{entity.revision_id}
+                  </span>
                 </h1>
                 <ul className="bullets inline entity-header__properties">
                   <li className="entity-header__by">
                     By{' '}
-                    <a href={ownerUrl}
+                    <a href={ownerUrl} className="link"
                       target="_blank">{entity.owner}</a>
                   </li>
+                  {this._generateLatestRevision()}
                   {this._generateSeriesList()}
                   {this._generateCounts()}
                 </ul>

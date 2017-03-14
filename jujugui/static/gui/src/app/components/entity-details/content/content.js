@@ -28,6 +28,7 @@ YUI.add('entity-content', function() {
       entityModel: React.PropTypes.object.isRequired,
       getFile: React.PropTypes.func.isRequired,
       hasPlans: React.PropTypes.bool.isRequired,
+      isLegacyJuju: React.PropTypes.bool,
       plans: React.PropTypes.array,
       pluralize: React.PropTypes.func.isRequired,
       renderMarkdown: React.PropTypes.func.isRequired,
@@ -69,14 +70,19 @@ YUI.add('entity-content', function() {
       @return {Object} The options markup.
     */
     _generateBundleConfig: function(entityModel) {
-      var services = entityModel.get('services');
-      if (!services) {
+      let applications;
+      if (this.props.isLegacyJuju) {
+        applications = entityModel.get('services');
+      } else {
+        applications = entityModel.get('applications');
+      }
+      if (!applications) {
         return;
       }
-      // Generate the options for each service in this bundle.
-      var servicesList = Object.keys(services).map((service) => {
-        var options = services[service].options || {};
-        // Generate the list of options for this service.
+      // Generate the options for each application in this bundle.
+      var applicationsList = Object.keys(applications).map(application => {
+        var options = applications[application].options || {};
+        // Generate the list of options for this application.
         var optionsList = Object.keys(options).map((name, i) => {
           return (
             <div className="entity-content__config-option"
@@ -97,15 +103,15 @@ YUI.add('entity-content', function() {
         if (optionsList.length === 0) {
           optionsList.push(
             <div key="none">
-              No config options for this service.
+              Config options not modified in this bundle.
             </div>);
         }
         return (
           <juju.components.ExpandingRow
             classes={classes}
-            key={service}>
+            key={application}>
             <div className="entity-content__bundle-config-title">
-              {service}
+              {application}
               <div className="entity-content__bundle-config-chevron">
                 <div className="entity-content__bundle-config-expand">
                   <juju.components.SvgIcon
@@ -126,7 +132,7 @@ YUI.add('entity-content', function() {
       });
       return (
         <ul>
-          {servicesList}
+          {applicationsList}
         </ul>);
     },
 
@@ -171,7 +177,7 @@ YUI.add('entity-content', function() {
       return list.map(function(item, i) {
         return (
           <li key={item + i}>
-            <a data-id={item} onClick={handler}>
+            <a data-id={item} className="link" onClick={handler}>
               {item}
             </a>
           </li>
@@ -231,12 +237,6 @@ YUI.add('entity-content', function() {
     */
     _generateDescription: function(entityModel) {
       if (entityModel.get('entityType') === 'charm') {
-        var bugLink = 'https://bugs.launchpad.net/charms/+source/' +
-          `${entityModel.get('name')}`;
-        var submitLink = 'https://bugs.launchpad.net/charms/+source/' +
-          `${entityModel.get('name')}/+filebug`;
-        var contributeLink = 'https://code.launchpad.net/~charmers/charms/' +
-          `${entityModel.get('series')}/${entityModel.get('name')}/trunk`;
         return (
           <div className="row row--grey entity-content__description">
             <div className="inner-wrapper">
@@ -244,26 +244,6 @@ YUI.add('entity-content', function() {
                 <p className="intro">{entityModel.get('description')}</p>
               </div>
               {this._generateTags()}
-              <div className="four-col entity-content__metadata last-col">
-                <h4>More information</h4>
-                <ul>
-                  <li>
-                    <a href={bugLink} target="_blank">
-                      Bugs
-                    </a>
-                  </li>
-                  <li>
-                    <a href={submitLink} target="_blank">
-                      Submit a bug
-                    </a>
-                  </li>
-                  <li>
-                    <a href={contributeLink} target="_blank">
-                      Contribute
-                    </a>
-                  </li>
-                </ul>
-              </div>
             </div>
           </div>
         );
@@ -317,21 +297,39 @@ YUI.add('entity-content', function() {
       @method _generateActions
     */
     _generateActions: function() {
-      var entityModel = this.props.entityModel;
-      if (entityModel.get('entityType') !== 'bundle') {
-        return;
+      const entity = this.props.entityModel.getAttrs();
+      let bugLink = entity.bugUrl;
+      let homepageLink = entity.homepage;
+      if (entity.entityType === 'bundle' && !homepageLink) {
+        homepageLink = 'https://code.launchpad.net/' +
+          `~charmers/charms/bundles/${entity.name}/bundle`;
+      } else if (entity.entityType === 'charm' && !bugLink) {
+        bugLink = 'https://bugs.launchpad.net/charms/' +
+          `+source/${entity.name}`;
       }
-      var contributeLink = 'https://code.launchpad.net/~charmers/charms/' +
-        `bundles/${entityModel.get('name')}/bundle`;
       return (
         <div className="section">
           <h3 className="section__title">
-            Actions
-          </h3>
-          <a href={contributeLink}
-            target="_blank">
             Contribute
-          </a>
+          </h3>
+          <ul className="section__links">
+            {bugLink ? (
+              <li>
+                <a href={bugLink}
+                  className="link"
+                  target="_blank">
+                  Submit a bug
+                </a>
+              </li>) : undefined}
+            {homepageLink ? (
+              <li>
+                <a href={homepageLink}
+                  className="link"
+                  target="_blank">
+                  Project homepage
+                </a>
+              </li>) : undefined}
+          </ul>
         </div>);
     },
 
@@ -442,6 +440,7 @@ YUI.add('entity-content', function() {
                   getFile={this.props.getFile} />
               </div>
               <div className="four-col">
+                {this._generateActions()}
                 {this._generateResources()}
                 {this._showEntityRelations()}
                 <juju.components.EntityFiles
@@ -450,7 +449,6 @@ YUI.add('entity-content', function() {
                   pluralize={this.props.pluralize} />
                 <juju.components.EntityContentRevisions
                   revisions={entityModel.get('revisions')} />
-                {this._generateActions()}
               </div>
             </div>
           </div>

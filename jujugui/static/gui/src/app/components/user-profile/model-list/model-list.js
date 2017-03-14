@@ -33,7 +33,15 @@ YUI.add('user-profile-model-list', function() {
       facadesExist: React.PropTypes.bool.isRequired,
       listModelsWithInfo: React.PropTypes.func.isRequired,
       switchModel: React.PropTypes.func.isRequired,
-      user: React.PropTypes.object
+      // userInfo must have the following attributes:
+      // - external: the external user name to use for retrieving data, for
+      //   instance, from the charm store. Might be null if the user is being
+      //   displayed for the current user and they are not authenticated to
+      //   the charm store;
+      // - isCurrent: whether the profile is being displayed for the currently
+      //   authenticated user;
+      // - profile: the user name for whom profile details must be displayed.
+      userInfo: React.PropTypes.object.isRequired
     },
 
     getInitialState: function() {
@@ -65,10 +73,10 @@ YUI.add('user-profile-model-list', function() {
 
     componentWillReceiveProps: function(nextProps) {
       const props = this.props;
-      const currentUser = props.user && props.user.user;
-      const nextUser = nextProps.user && nextProps.user.user;
-      if (nextUser !== currentUser ||
-        props.facadesExist !== nextProps.facadesExist) {
+      if (
+        props.userInfo.profile !== nextProps.userInfo.profile ||
+        props.facadesExist !== nextProps.facadesExist
+      ) {
         this._fetchModels(nextProps.facadesExist);
       }
     },
@@ -108,6 +116,12 @@ YUI.add('user-profile-model-list', function() {
           broadcastStatus('error');
           console.error(err);
           return;
+        }
+        if (!this.props.userInfo.isCurrent) {
+          const extUser = this.props.userInfo.external + '@external';
+          modelList = modelList.filter(model => {
+            return model.owner === extUser;
+          });
         }
         if (modelList.length) {
           broadcastStatus('ok');
@@ -259,7 +273,13 @@ YUI.add('user-profile-model-list', function() {
           return null;
         }
       }
-      const lastConnection = model.lastConnection || '--';
+      const region = model.region || 'no region';
+      let owner = '--';
+      // TODO frankban: it's not clear why we should ever miss an owner.
+      // Anyway, this logic pre-existed my change.
+      if (model.owner) {
+        owner = model.owner = model.owner.split('@')[0];
+      }
       return (
         <juju.components.UserProfileEntity
           displayConfirmation={this._displayConfirmation.bind(this, model)}
@@ -272,18 +292,18 @@ YUI.add('user-profile-model-list', function() {
             {model.name || '--'}
           </span>
           <span className="user-profile__list-col four-col">
-            --
+            {model.cloud + '/' + region}
           </span>
           <span className="user-profile__list-col two-col">
             <juju.components.DateDisplay
-              date={lastConnection}
+              date={model.lastConnection || '--'}
               relative={true} />
           </span>
           <span className="user-profile__list-col one-col">
-            --
+            {model.numMachines}
           </span>
           <span className="user-profile__list-col two-col last-col">
-            {model.owner || '--'}
+            {owner}
           </span>
         </juju.components.UserProfileEntity>);
     },
@@ -301,13 +321,13 @@ YUI.add('user-profile-model-list', function() {
             Name
           </span>
           <span className="user-profile__list-col four-col">
-            Credential
+            Cloud/Region
           </span>
           <span className="user-profile__list-col two-col">
             Last accessed
           </span>
           <span className="user-profile__list-col one-col">
-            Units
+            Machines
           </span>
           <span className={
             'user-profile__list-col two-col last-col'}>
@@ -330,11 +350,13 @@ YUI.add('user-profile-model-list', function() {
       // https://bugs.launchpad.net/juju/+bug/1629089 is resolved.
       //const acl = props.acl;
       //if (acl && acl.canAddModels()) {
-      createNewButton = (
-        <juju.components.CreateModelButton
-          changeState={props.changeState}
-          switchModel={props.switchModel} />
-      );
+      if (props.userInfo.isCurrent) {
+        createNewButton = (
+          <juju.components.CreateModelButton
+            changeState={props.changeState}
+            switchModel={props.switchModel} />
+        );
+      }
       //}
       const list = this.state.modelList;
       let content;
@@ -347,14 +369,22 @@ YUI.add('user-profile-model-list', function() {
           </ul>
         );
       }
+      let label = 'Models';
+      if (!props.userInfo.isCurrent) {
+        label = 'Models shared with you';
+      }
       return (
         <div className="user-profile__model-list">
           <div className="user-profile__header twelve-col no-margin-bottom">
-            Models
-            <span className="user-profile__size">
-              ({list.length})
-            </span>
-            {createNewButton}
+            <div className="left">
+              {label}
+              <span className="user-profile__size">
+                ({list.length})
+              </span>
+            </div>
+            <div className="right">
+              {createNewButton}
+            </div>
           </div>
           {content}
           {this._generateConfirmation()}

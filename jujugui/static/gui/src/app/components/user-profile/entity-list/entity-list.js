@@ -29,8 +29,7 @@ YUI.add('user-profile-entity-list', function() {
       charmstore: React.PropTypes.object.isRequired,
       getDiagramURL: React.PropTypes.func.isRequired,
       type: React.PropTypes.string.isRequired,
-      user: React.PropTypes.object,
-      users: React.PropTypes.object.isRequired
+      user: React.PropTypes.string,
     },
 
     getInitialState: function() {
@@ -51,8 +50,7 @@ YUI.add('user-profile-entity-list', function() {
     },
 
     componentWillMount: function() {
-      const users = this.props.users;
-      if (users.charmstore && users.charmstore.user) {
+      if (this.props.user) {
         this._fetchEntities(this.props);
       }
     },
@@ -66,9 +64,7 @@ YUI.add('user-profile-entity-list', function() {
     componentWillReceiveProps: function(nextProps) {
       const props = this.props;
       // Compare next and previous charmstore users in a data-safe manner.
-      const prevCSUser = props.users.charmstore || {};
-      const nextCSUser = nextProps.users.charmstore || {};
-      if (nextCSUser.user !== prevCSUser.user) {
+      if (props.user !== nextProps.user) {
         this._fetchEntities(nextProps);
       }
     },
@@ -80,15 +76,14 @@ YUI.add('user-profile-entity-list', function() {
       @param {Object} props the component properties to use.
     */
     _fetchEntities:  function(props) {
-      const callback = this._fetchEntitiesCallback;
       const charmstore = props.charmstore;
-      const username = props.users.charmstore && props.users.charmstore.user;
-      if (charmstore && charmstore.list && username) {
+      if (charmstore && charmstore.list && props.user) {
         this.props.broadcastStatus('starting');
+        const callback = this._fetchEntitiesCallback;
         // Delay the call until after the state change to prevent race
         // conditions.
         this.setState({loadingEntities: true}, () => {
-          const xhr = charmstore.list(username, callback, props.type);
+          const xhr = charmstore.list(props.user, callback, props.type);
           this.xhrs.push(xhr);
         });
       }
@@ -225,11 +220,9 @@ YUI.add('user-profile-entity-list', function() {
             'user-profile__list-icons'}>
             {services}
           </span>
-          <span className="user-profile__list-col one-col prepend-one">
+          <span className={'user-profile__list-col three-col prepend-one ' +
+            'last-col'}>
             {unitCount}
-          </span>
-          <span className="user-profile__list-col two-col last-col">
-            {bundle.owner}
           </span>
         </juju.components.UserProfileEntity>);
     },
@@ -250,12 +243,9 @@ YUI.add('user-profile-entity-list', function() {
             'user-profile__list-icons'}>
             Charms
           </span>
-          <span className="user-profile__list-col one-col prepend-one">
+          <span className={'user-profile__list-col three-col prepend-one ' +
+            'last-col'}>
             Units
-          </span>
-          <span className={
-            'user-profile__list-col two-col last-col'}>
-            Owner
           </span>
         </li>);
     },
@@ -277,23 +267,20 @@ YUI.add('user-profile-entity-list', function() {
           entity={charm}
           key={id}
           type="charm">
-          <span className={'user-profile__list-col three-col ' +
+          <span className={'user-profile__list-col five-col ' +
             'user-profile__list-name'}>
             {charm.name}
             {this._generateTags(charm.tags, id)}
           </span>
-          <span className="user-profile__list-col four-col">
-            {this._generateSeries(charm.series, id)}
-          </span>
-          <span className={'user-profile__list-col one-col ' +
+          <span className={'user-profile__list-col three-col ' +
             'user-profile__list-icons'}>
             <img className="user-profile__list-icon"
               src={charm.icon}
               title={charm.name} />
           </span>
-          <span className={'user-profile__list-col two-col ' +
-            'prepend-two last-col'}>
-            {charm.owner}
+          <span className={'user-profile__list-col prepend-one three-col ' +
+            'last-col'}>
+            {this._generateSeries(charm.series, id)}
           </span>
         </juju.components.UserProfileEntity>);
     },
@@ -307,14 +294,12 @@ YUI.add('user-profile-entity-list', function() {
     _generateCharmHeader: function() {
       return (
         <li className="user-profile__list-header twelve-col">
-          <span className="user-profile__list-col three-col">
+          <span className="user-profile__list-col eight-col">
             Name
           </span>
-          <span className="user-profile__list-col seven-col">
+          <span className={'user-profile__list-col prepend-one three-col ' +
+            'last-col'}>
             Series
-          </span>
-          <span className="user-profile__list-col two-col last-col">
-            Owner
           </span>
         </li>);
     },

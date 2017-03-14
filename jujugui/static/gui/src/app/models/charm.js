@@ -550,13 +550,19 @@ YUI.add('juju-charm-models', function(Y) {
          *
          */
         getter: function() {
-          // full_name
-          var tmp = [this.get('series'), this.get('package_name')],
-              owner = this.get('owner');
+          const series = this.get('series');
+          const parts = [];
+          const owner = this.get('owner');
           if (owner) {
-            tmp.unshift('~' + owner);
+            parts.push(`~${owner}`);
           }
-          return tmp.join('/');
+          if (!Array.isArray(series)) {
+            // We do not want to have the series list in the url if it is a
+            // multi-series charm.
+            parts.push(series);
+          }
+          parts.push(this.get('package_name'));
+          return parts.join('/');
         }
       },
       shouldShowIcon: {
@@ -586,6 +592,7 @@ YUI.add('juju-charm-models', function(Y) {
       },
       is_approved: {},
       is_subordinate: {},
+      latest_revision: {},
       maintainer: {},
       /*
         API related metadata information for this charm object.
@@ -696,6 +703,7 @@ YUI.add('juju-charm-models', function(Y) {
           }
         }
       },
+      revision_id: {},
       scheme: {
         value: 'cs',
         /**

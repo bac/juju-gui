@@ -148,23 +148,25 @@ describe('Charmbrowser', function() {
   });
 
   it('displays entity details when the app state calls for it', function() {
-    var id = 'foobar';
-    var apiUrl = 'http://example.com';
+    const id = 'foobar';
+    const apiUrl = 'http://example.com';
     appState.current.store = id;
-    var getEntity = sinon.spy();
-    var makeEntityModel = sinon.spy();
-    var deployService = sinon.spy();
-    var importBundleYAML = sinon.spy();
-    var getBundleYAML = sinon.spy();
-    var getFile = sinon.spy();
-    var renderMarkdown = sinon.spy();
-    var getDiagramURL = sinon.spy();
-    var listPlansForCharm = sinon.spy();
-    var addNotification = sinon.spy();
-    var utils = {
+    const getEntity = sinon.spy();
+    const makeEntityModel = sinon.spy();
+    const deployService = sinon.spy();
+    const importBundleYAML = sinon.spy();
+    const getBundleYAML = sinon.spy();
+    const getModelName = sinon.spy();
+    const getFile = sinon.spy();
+    const renderMarkdown = sinon.spy();
+    const getDiagramURL = sinon.spy();
+    const listPlansForCharm = sinon.spy();
+    const addNotification = sinon.spy();
+    const utils = {
       pluralize: sinon.spy()
     };
-    var renderer = jsTestUtils.shallowRender(
+    const setPageTitle = sinon.spy();
+    const renderer = jsTestUtils.shallowRender(
       <juju.components.Charmbrowser
         acl={acl}
         addNotification={addNotification}
@@ -179,14 +181,17 @@ describe('Charmbrowser', function() {
         getDiagramURL={getDiagramURL}
         getEntity={getEntity}
         getFile={getFile}
+        getModelName={getModelName}
         importBundleYAML={importBundleYAML}
+        isLegacyJuju={false}
         listPlansForCharm={listPlansForCharm}
         makeEntityModel={makeEntityModel}
         utils={utils}
         renderMarkdown={renderMarkdown}
-        series={{}} />, true);
-    var instance = renderer.getMountedInstance();
-    var output = renderer.getRenderOutput();
+        series={{}}
+        setPageTitle={setPageTitle} />, true);
+    const instance = renderer.getMountedInstance();
+    const output = renderer.getRenderOutput();
     const expected = (
         <juju.components.Panel
           instanceName="white-box"
@@ -199,10 +204,12 @@ describe('Charmbrowser', function() {
               acl={acl}
               apiUrl={apiUrl}
               importBundleYAML={importBundleYAML}
+              isLegacyJuju={false}
               getBundleYAML={getBundleYAML}
               changeState={
                 output.props.children.props.children.props.changeState}
               getEntity={getEntity}
+              getModelName={getModelName}
               scrollPosition={0}
               listPlansForCharm={listPlansForCharm}
               makeEntityModel={makeEntityModel}
@@ -213,7 +220,8 @@ describe('Charmbrowser', function() {
               displayPlans={true}
               id={id}
               addNotification={addNotification}
-              pluralize={utils.pluralize} />
+              pluralize={utils.pluralize}
+              setPageTitle={setPageTitle} />
           </div>
         </juju.components.Panel>);
     assert.deepEqual(output, expected);
@@ -228,6 +236,7 @@ describe('Charmbrowser', function() {
     const importBundleYAML = sinon.stub();
     const getBundleYAML = sinon.stub();
     const getFile = sinon.stub();
+    const getModelName = sinon.stub();
     const renderMarkdown = sinon.stub();
     const getDiagramURL = sinon.stub();
     const listPlansForCharm = sinon.stub();
@@ -235,7 +244,8 @@ describe('Charmbrowser', function() {
     const utils = {
       pluralize: sinon.stub()
     };
-    var renderer = jsTestUtils.shallowRender(
+    const setPageTitle = sinon.stub();
+    const renderer = jsTestUtils.shallowRender(
       <juju.components.Charmbrowser
         acl={acl}
         addNotification={addNotification}
@@ -250,14 +260,17 @@ describe('Charmbrowser', function() {
         getDiagramURL={getDiagramURL}
         getEntity={getEntity}
         getFile={getFile}
+        getModelName={getModelName}
         importBundleYAML={importBundleYAML}
+        isLegacyJuju={false}
         listPlansForCharm={listPlansForCharm}
         makeEntityModel={makeEntityModel}
         utils={utils}
         renderMarkdown={renderMarkdown}
-        series={{}} />, true);
-    var instance = renderer.getMountedInstance();
-    var output = renderer.getRenderOutput();
+        series={{}}
+        setPageTitle={setPageTitle} />, true);
+    const instance = renderer.getMountedInstance();
+    const output = renderer.getRenderOutput();
     const expected = (
         <juju.components.Panel
           instanceName="white-box"
@@ -270,10 +283,12 @@ describe('Charmbrowser', function() {
               acl={acl}
               apiUrl={apiUrl}
               importBundleYAML={importBundleYAML}
+              isLegacyJuju={false}
               getBundleYAML={getBundleYAML}
               changeState={
                 output.props.children.props.children.props.changeState}
               getEntity={getEntity}
+              getModelName={getModelName}
               scrollPosition={0}
               listPlansForCharm={listPlansForCharm}
               makeEntityModel={makeEntityModel}
@@ -284,9 +299,46 @@ describe('Charmbrowser', function() {
               displayPlans={true}
               id='~spinch/koala'
               addNotification={addNotification}
-              pluralize={utils.pluralize} />
+              pluralize={utils.pluralize}
+              setPageTitle={setPageTitle} />
           </div>
         </juju.components.Panel>);
     assert.deepEqual(output, expected);
+  });
+
+  it('closes when clicked outside', function() {
+    appState.current.user = 'spinch/koala';
+    const utils = {
+      pluralize: sinon.stub()
+    };
+    const renderer = jsTestUtils.shallowRender(
+      <juju.components.Charmbrowser
+        acl={acl}
+        addNotification={sinon.stub()}
+        apiUrl="http://example.com"
+        apiVersion="v5"
+        appState={appState}
+        charmstoreSearch={sinon.stub()}
+        charmstoreURL="http://1.2.3.4/"
+        deployService={sinon.stub()}
+        displayPlans={true}
+        getBundleYAML={sinon.stub()}
+        getDiagramURL={sinon.stub()}
+        getEntity={sinon.stub()}
+        getFile={sinon.stub()}
+        importBundleYAML={sinon.stub()}
+        listPlansForCharm={sinon.stub()}
+        makeEntityModel={sinon.stub()}
+        utils={utils}
+        renderMarkdown={sinon.stub()}
+        series={{}} />, true);
+    const output = renderer.getRenderOutput();
+    output.props.clickAction();
+    assert.equal(appState.changeState.callCount, 1);
+    assert.deepEqual(appState.changeState.args[0][0], {
+      root: null,
+      search: null,
+      store: null
+    });
   });
 });

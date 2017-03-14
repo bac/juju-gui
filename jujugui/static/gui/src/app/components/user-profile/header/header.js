@@ -26,8 +26,15 @@ YUI.add('user-profile-header', function() {
       avatar: React.PropTypes.string.isRequired,
       interactiveLogin: React.PropTypes.func,
       links: React.PropTypes.array.isRequired,
-      username: React.PropTypes.string.isRequired,
-      users: React.PropTypes.object.isRequired
+      // userInfo must have the following attributes:
+      // - external: the external user name to use for retrieving data, for
+      //   instance, from the charm store. Might be null if the user is being
+      //   displayed for the current user and they are not authenticated to
+      //   the charm store;
+      // - isCurrent: whether the profile is being displayed for the currently
+      //   authenticated user;
+      // - profile: the user name for whom profile details must be displayed.
+      userInfo: React.PropTypes.object.isRequired
     },
 
     /**
@@ -37,18 +44,15 @@ YUI.add('user-profile-header', function() {
       @returns {Object} The login component.
     */
     _generateLogin: function() {
-      var props = this.props;
-      var interactiveLogin = props.interactiveLogin;
-      var users = props.users;
-      var authenticated = users.charmstore && users.charmstore.user;
-      if (!interactiveLogin || authenticated) {
+      const props = this.props;
+      if (props.userInfo.external) {
         return;
       }
       return (
         <juju.components.GenericButton
-          title="Log in to the charmstore"
+          title="Log in to the charm store"
           type="inline-neutral"
-          action={interactiveLogin} />);
+          action={props.interactiveLogin} />);
     },
 
     /**
@@ -66,7 +70,7 @@ YUI.add('user-profile-header', function() {
           </span>);
       }
       return (
-        <img alt={this.props.username}
+        <img alt={this.props.userInfo.profile}
           className={className}
           src={this.props.avatar} />);
     },
@@ -113,14 +117,12 @@ YUI.add('user-profile-header', function() {
     },
 
     render: function () {
-      var props = this.props;
-      var username = props.username;
       return (
         <div className="user-profile-header twelve-col">
           {this._generateLogin()}
           {this._generateAvatar()}
           <h1 className="user-profile-header__username">
-            {username}
+            {this.props.userInfo.profile}
           </h1>
           {this._generateLinks()}
         </div>);

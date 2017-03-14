@@ -73,13 +73,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       </div>
 
       <div class="header-banner header-banner--left">
-        <div class="header-banner__logo">
-          <svg class="svg-icon"
-            viewBox="0 0 90 35"
-            style="width:90px; height:35px;">
-            <use xlink:href="#juju-logo" />
-          </svg>
-        </div>
+        <div id="header-logo" class="header-banner__logo"></div>
         <div id="header-breadcrumb"></div>
       	<div id="model-actions-container"></div>
         <div id="provider-logo-container" class="header-banner__provider"></div>
@@ -89,6 +83,8 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
         <ul class="header-banner__list--right">
           <li id="maas-server" style="display:none" class="header-banner__list-item">
             <a href="" target="_blank" class="header-banner__link">MAAS UI</a>
+          </li>
+          <li id="header-help" class="header-banner__list-item header-banner__list-item--no-padding">
           </li>
           <li id="header-search-container"
               class="header-banner__list-item header-banner__list-item--no-padding"></li>
@@ -132,11 +128,9 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
             <use xlink:href="#juju-logo" />
           </svg>
           <div class="panel">
+            <div id="loading-indicator"></div>
             <div id="loading-message-text" class="header">
-              Loading the Juju GUI
-            </div>
-            <div id="loading-spinner">
-              <span class="spinner-loading"></span>
+              Hello, world.
             </div>
           </div>
         </div>
@@ -154,7 +148,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       <div id="white-box-container"></div>
       <div id="machine-view"></div>
 
-      <div class="cookie-policy" style="display:none;">
+      <div class="cookie-policy">
         <div class="wrapper">
           <a href="" class="link-cta">Close</a>
           <p>
@@ -166,7 +160,8 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       </div>
       <div id="viewport">
         <div id="content">
-            <div id="shortcut-help" style="display:none"></div>
+            <div id="shortcut-help" class="modal" style="display:none"></div>
+            <div id="shortcut-settings" class="modal modal--narrow" style="display: none"></div>
             <div id="main">
             </div> <!-- /container -->
             <div id="drag-over-notification-container"></div>
@@ -183,13 +178,59 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 
       var flags = {}; // Declare an empty set of feature flags.
 
+      // Note that any changes to MessageRotator need to be made in both
+      // index.html.go and index.html.mako.
+      class MessageRotator {
+        constructor() {
+          this.messages = [
+            'Requesting code...',
+            'Reading the configuration...',
+            'Connecting to the backend...',
+            'Reticulating splines...',
+            'Establishing API connections...',
+            'Verifying identity...',
+            'Checking controller information...',
+            'Setting phasers to stun...',
+            'Querying the charm store...',
+            'Rendering the GUI...'
+          ];
+          this.interval = 1000;
+          this.index = 0;
+          this.maxIndex = this.messages.length - 1;
+        }
+
+        advance() {
+          // Display the next message.
+          const message = this.messages[this.index];
+          document.getElementById('loading-message-text').innerHTML = message;
+          // If we're at the end of the messages, loop back to the beginning.
+          // Else, advance to the next message.
+          if (this.index === this.maxIndex) {
+            this.index = 0;
+          } else {
+            this.index += 1;
+          }
+        }
+
+        start() {
+          // Display the first message.
+          this.advance();
+          // Setup the timer for subsequent messages.
+          this.timerId = window.setInterval(() => this.advance(), this.interval);
+        }
+
+        stop() {
+          if (this.timerId) {
+            window.clearInterval(this.timerId);
+          }
+        }
+      }
+
+      messageRotator = new MessageRotator();
+      messageRotator.start();
+
       getDocument = function() {
         return document;
-      };
-
-      setLoadingMessageText = function(newText) {
-        getDocument()
-          .getElementById('loading-message-text').innerHTML = newText;
       };
 
       isBrowserSupported = function(agent) {
@@ -346,7 +387,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
     <script data-manual src="{{.comboURL}}?app/assets/javascripts/react-with-addons.js&app/assets/javascripts/react-dom.js&app/assets/javascripts/classnames.js&app/assets/javascripts/clipboard.js&app/assets/javascripts/react-click-outside.js&app/assets/javascripts/ReactDnD.min.js&app/assets/javascripts/ReactDnDHTML5Backend.min.js&app/assets/javascripts/marked.js&app/assets/javascripts/prism.js&app/assets/javascripts/prism-languages.js"></script>
     <script src="{{.comboURL}}?app/assets/javascripts/yui/yui/yui.js&app/assets/javascripts/yui/loader/loader.js&app/assets/javascripts/d3.js"></script>
     <script src="{{.comboURL}}?modules.js"></script>
-    <script src="{{.comboURL}}?app/state/state.js&app/store/env/bakery.js&app/jujulib/index.js&app/jujulib/charmstore.js&app/jujulib/bundleservice.js&app/jujulib/plans.js&app/jujulib/terms.js&app/jujulib/reconnecting-websocket.js&app/jujulib/urls.js&app/jujulib/bakery-factory.js"></script>
+    <script src="{{.comboURL}}?app/state/state.js&app/store/env/bakery.js&app/jujulib/index.js&app/jujulib/charmstore.js&app/jujulib/bundleservice.js&app/jujulib/plans.js&app/jujulib/register.js&app/jujulib/terms.js&app/jujulib/reconnecting-websocket.js&app/jujulib/urls.js&app/jujulib/bakery-factory.js"></script>
     {{else}}
     <!-- data-manual tells the Prism syntax highlighting lib to not auto-highlight -->
     <script data-manual src="{{.comboURL}}?app/assets/javascripts/react-with-addons.min.js&app/assets/javascripts/react-dom.min.js&app/assets/javascripts/classnames-min.js&app/assets/javascripts/clipboard.min.js&app/assets/javascripts/react-click-outside.js&app/assets/javascripts/ReactDnD.min.js&app/assets/javascripts/ReactDnDHTML5Backend.min.js&app/assets/javascripts/marked.min.js&app/assets/javascripts/prism.min.js&app/assets/javascripts/prism-languages-min.js"></script>
@@ -360,8 +401,6 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       // function which will be picked up by the setTimeout, and the app will
       // start.
       startTheApp = function() {
-        setLoadingMessageText('Connecting to the Juju model');
-
         window.flags = featureFlags(
             window.location.href,
             window.juju_config.flags || {}
@@ -393,8 +432,8 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
                 comboBase: "{{.comboURL}}?",
                 root: 'app/',
                 // From modules.js
-                modules: YUI_MODULES,
-            },
+                modules: YUI_MODULES
+            }
           }
         };
 
@@ -403,6 +442,8 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
           // We need to activate the hotkeys when running the application
           // in production. Unit tests should call it manually.
           app.activateHotkeys();
+          const model = app.controllerAPI ? app.controllerAPI : app.env;
+          model.once('login', () => messageRotator.stop());
         });
 
       };

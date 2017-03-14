@@ -99,10 +99,12 @@ describe('App', function() {
     afterEach(function(done) {
       // Reset the flags.
       window.flags = {};
-      app.after('destroy', function() {
-        sessionStorage.setItem('credentials', null);
-        done();
-      });
+      if (app) {
+        app.after('destroy', function() {
+          sessionStorage.setItem('credentials', null);
+          done();
+        });
+      }
     });
 
     function constructAppInstance(config, context) {
@@ -259,15 +261,6 @@ describe('App', function() {
         assert.strictEqual(maasNode.getStyle('display'), 'none');
         env.set('maasServer', null);
         // The MAAS node is still hidden.
-        assert.strictEqual(maasNode.getStyle('display'), 'none');
-        // Further changes to the maasServer attribute don't activate the link.
-        env.set('maasServer', 'http://1.2.3.4/MAAS');
-        assert.strictEqual(maasNode.getStyle('display'), 'none');
-      });
-
-      it('does not show the MAAS link if already null in the env', function() {
-        env.set('maasServer', null);
-        constructAppInstance({env: env}, this);
         assert.strictEqual(maasNode.getStyle('display'), 'none');
         // Further changes to the maasServer attribute don't activate the link.
         env.set('maasServer', 'http://1.2.3.4/MAAS');
@@ -1236,6 +1229,7 @@ describe('App', function() {
         ecs: fake_ecs,
         closeCalled: false,
         connect: function() {},
+        onceAfter: sinon.stub(),
         socketUrl: 'wss://example.com/ws',
         setUser: 'not-called',
         setPassword: 'not-called',
@@ -1511,6 +1505,23 @@ describe('App', function() {
       var users = app.get('users');
       assert.deepEqual(users['charmstore'], user);
     });
+
+    it('re-renders the user profile & breadcrumb if told to', function() {
+      const user = {user: 'test'};
+      const state = {test: 'state'};
+      app.state._appStateHistory.push(state);
+      app._renderUserProfile = sinon.stub();
+      app._renderBreadcrumb = sinon.stub();
+      app.storeUser('charmstore', true, true);
+      assert.equal(csStub.callCount, 1);
+      csStub.lastCall.args[0](null, user);
+      assert.equal(app._renderUserProfile.callCount, 1);
+      assert.equal(app._renderUserProfile.args[0][0], state);
+      assert.equal(typeof app._renderUserProfile.args[0][1], 'function');
+      assert.equal(app._renderBreadcrumb.callCount, 1);
+      assert.deepEqual(app.get('users')['charmstore'], user);
+    });
+
   });
 
 
@@ -1553,7 +1564,7 @@ describe('App', function() {
       app.destroy({remove: true});
     });
 
-    it('fetches the auth', function() {
+    it('uses charm store credentials if present', function() {
       app.set('users', {charmstore: {user: 'admin'}});
       assert.deepEqual(app._getAuth(), {
         user: 'admin',
@@ -1562,12 +1573,31 @@ describe('App', function() {
       });
     });
 
+    it('uses charm store credentials if present (external)', function() {
+      app.set('users', {charmstore: {user: 'who@external'}});
+      assert.deepEqual(app._getAuth(), {
+        user: 'who@external',
+        usernameDisplay: 'who',
+        rootUserName: 'who'
+      });
+    });
+
+    it('uses charm store credentials if present (customized)', function() {
+      app.set('users', {charmstore: {user: 'dalek@skaro'}});
+      assert.deepEqual(app._getAuth(), {
+        user: 'dalek@skaro',
+        usernameDisplay: 'dalek@skaro',
+        rootUserName: 'dalek'
+      });
+    });
+
     it('uses external auth if present', function() {
       app.set('auth', {user: {name: 'bark'}});
       app.set('users', {foo: 'bar'});
       assert.deepEqual(app._getAuth(), {
         usernameDisplay: 'bark',
-        user: {name: 'bark'}
+        user: {name: 'bark'},
+        rootUserName: 'bark'
       });
     });
 
@@ -1576,12 +1606,52 @@ describe('App', function() {
       controllerCredStub.returns({user: 'dalek@external'});
       assert.deepEqual(app._getAuth(), {
         user: 'dalek@external',
-        usernameDisplay: 'dalek@external',
+        usernameDisplay: 'dalek',
+        rootUserName: 'dalek'
+      });
+    });
+
+    it('uses controller credentials if present (local)', function() {
+      app.set('users', {});
+      controllerCredStub.returns({user: 'dalek'});
+      assert.deepEqual(app._getAuth(), {
+        user: 'dalek',
+        usernameDisplay: 'dalek@local',
+        rootUserName: 'dalek'
+      });
+    });
+
+    it('uses controller credentials if present (customized)', function() {
+      app.set('users', {});
+      controllerCredStub.returns({user: 'dalek@skaro'});
+      assert.deepEqual(app._getAuth(), {
+        user: 'dalek@skaro',
+        usernameDisplay: 'dalek@skaro',
         rootUserName: 'dalek'
       });
     });
 
     it('uses model credentials if present', function() {
+      app.set('users', {});
+      modelCredStub.returns({user: 'who@external'});
+      assert.deepEqual(app._getAuth(), {
+        user: 'who@external',
+        usernameDisplay: 'who',
+        rootUserName: 'who'
+      });
+    });
+
+    it('uses model credentials if present (local)', function() {
+      app.set('users', {});
+      modelCredStub.returns({user: 'who'});
+      assert.deepEqual(app._getAuth(), {
+        user: 'who',
+        usernameDisplay: 'who@local',
+        rootUserName: 'who'
+      });
+    });
+
+    it('uses model credentials if present (customized)', function() {
       app.set('users', {});
       modelCredStub.returns({user: 'who@local'});
       assert.deepEqual(app._getAuth(), {
@@ -2361,6 +2431,277 @@ describe('App', function() {
       assert.equal(app.createSocketURL.callCount, 0);
       assert.equal(app.switchEnv.callCount, 1);
       assert.deepEqual(app.switchEnv.args[0], [undefined]);
+    });
+  });
+
+  describe('anonymous mode', function() {
+    let app, juju, Y;
+
+    before(function(done) {
+      Y = YUI(GlobalConfig).use(['juju-gui', 'juju-tests-utils'], function(Y) {
+        juju = juju = Y.namespace('juju');
+        done();
+      });
+    });
+
+    beforeEach(function() {
+      app = new Y.juju.App({
+        baseUrl: 'http://example.com/',
+        controllerAPI: new juju.ControllerAPI({
+          conn: new testUtils.SocketStub()
+        }),
+        env: new juju.environments.GoEnvironment({
+          conn: new testUtils.SocketStub(),
+          ecs: new juju.EnvironmentChangeSet(),
+          user: 'user',
+          password: 'password'
+        }),
+        socketTemplate: '/model/$uuid/api',
+        controllerSocketTemplate: '/api',
+        viewContainer: container,
+        jujuCoreVersion: '2.0.0'
+      });
+      app.controllerAPI.set('connected', false);
+      app.setUpControllerAPI(app.controllerAPI);
+      app._displayLogin = sinon.stub();
+      app.createSocketURL = sinon.stub();
+      app.loginToAPIs = sinon.stub();
+      app.maskVisibility = sinon.stub();
+    });
+
+    afterEach(function() {
+      app.destroy();
+    });
+
+    // Report whether the application canvas is visible.
+    const appIsVisible = () => {
+      if (!app.maskVisibility.called) {
+        return false;
+      }
+      const args = app.maskVisibility.args[0];
+      return !args[0];
+    };
+
+    it('is disabled when the app is created', () => {
+      assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+    });
+
+    it('is enabled when the controller connects in gisf mode', done => {
+      app.set('gisf', true);
+      app.state = {current: {root: 'new'}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, true, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), true, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, false, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is disabled when the controller connects but not in gisf', done => {
+      app.set('gisf', false);
+      app.state = {current: {root: 'new'}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), false, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, true, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is disabled when credentials are available', done => {
+      app.set('gisf', true);
+      app.controllerAPI.setCredentials({macaroons: 'macaroons'});
+      app.state = {current: {root: 'new'}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), false, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, false, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, true, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is disabled when not in /new', done => {
+      app.set('gisf', true);
+      app.state = {current: {root: 'store'}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), false, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, true, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is disabled when in the homepage', done => {
+      app.set('gisf', true);
+      app.state = {current: {root: null}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), false, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, true, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is kept enabled when previously enabled', done => {
+      app.set('gisf', true);
+      app.anonymousMode = true;
+      app.state = {current: {root: 'store'}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, true, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), true, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, false, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is kept enabled when previously enabled and in homepage', done => {
+      app.set('gisf', true);
+      app.anonymousMode = true;
+      app.state = {current: {root: null}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, true, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), true, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, false, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is ignored when enabled but navigating to the login page', done => {
+      app.set('gisf', true);
+      app.anonymousMode = true;
+      app.state = {current: {root: 'login'}};
+      app.controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(app.anonymousMode, true, 'anonymousMode');
+        assert.strictEqual(appIsVisible(), false, 'appIsVisible');
+        assert.strictEqual(app._displayLogin.called, true, '_displayLogin');
+        assert.strictEqual(app.loginToAPIs.called, false, 'loginToAPIs');
+        done();
+      });
+      app.controllerAPI.set('connected', true);
+    });
+
+    it('is disabled after successful login', done => {
+      app.anonymousMode = true;
+      app.state = {current: {root: null}};
+      app._renderLoginOutLink = sinon.stub();
+      // Set a model UUID so that the login subscriber execution stops as soon
+      // as possible.
+      app.env.set('modelUUID', 'uuid');
+      app.controllerAPI.after('login', evt => {
+        assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+        assert.strictEqual(
+          app._renderLoginOutLink.called, true, '_renderLoginOutLink');
+        done();
+      });
+      app.controllerAPI.fire('login', {err: null});
+    });
+
+    it('is disabled after failed login', done => {
+      app.anonymousMode = true;
+      app.state = {current: {root: null}};
+      app._renderLogin = sinon.stub();
+      app.controllerAPI.after('login', evt => {
+        assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
+        assert.strictEqual(app._renderLogin.called, true, '_renderLogin');
+        done();
+      });
+      app.controllerAPI.fire('login', {err: 'bad wolf'});
+    });
+  });
+
+  describe('_sharingVisibility', function() {
+    let app, juju, Y;
+
+    before(function(done) {
+      Y = YUI(GlobalConfig).use(['juju-gui', 'juju-tests-utils'], function(Y) {
+        juju = juju = Y.namespace('juju');
+        done();
+      });
+    });
+
+    beforeEach(function() {
+      app = new Y.juju.App({
+        baseUrl: 'http://example.com/',
+        controllerAPI: new juju.ControllerAPI({
+          conn: new testUtils.SocketStub()
+        }),
+        env: new juju.environments.GoEnvironment({
+          conn: new testUtils.SocketStub(),
+          ecs: new juju.EnvironmentChangeSet(),
+          user: 'user',
+          password: 'password'
+        }),
+        socketTemplate: '/model/$uuid/api',
+        controllerSocketTemplate: '/api',
+        viewContainer: container,
+        jujuCoreVersion: '2.0.0'
+      });
+
+    });
+
+    afterEach(function() {
+      app.destroy();
+    });
+  });
+
+  describe('setPageTitle', function () {
+    let app, juju, Y;
+
+    before(function(done) {
+      Y = YUI(GlobalConfig).use(['juju-gui', 'juju-tests-utils'], function(Y) {
+        juju = juju = Y.namespace('juju');
+        done();
+      });
+    });
+
+    beforeEach(function() {
+      app = new Y.juju.App({
+        baseUrl: 'http://example.com/',
+        controllerAPI: new juju.ControllerAPI({
+          conn: new testUtils.SocketStub()
+        }),
+        env: new juju.environments.GoEnvironment({
+          conn: new testUtils.SocketStub(),
+          ecs: new juju.EnvironmentChangeSet(),
+          user: 'user',
+          password: 'password'
+        }),
+        socketTemplate: '/model/$uuid/api',
+        controllerSocketTemplate: '/api',
+        viewContainer: container,
+        jujuCoreVersion: '2.0.0'
+      });
+    });
+
+    afterEach(function() {
+      app.destroy();
+    });
+
+    it('can set the page title', () => {
+      document.title = 'Test';
+      app.setPageTitle('Testing');
+      assert.equal(document.title, 'Testing - Juju GUI');
+    });
+
+    it('can set the default page title', () => {
+      document.title = 'Test';
+      app.defaultPageTitle = 'Juju GUI';
+      app.setPageTitle();
+      assert.equal(document.title, 'Juju GUI');
     });
   });
 });

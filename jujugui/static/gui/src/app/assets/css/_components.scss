@@ -1,6 +1,9 @@
 // Components
 
 @import '../../components/account/account';
+@import '../../components/account/credentials/credentials';
+@import '../../components/account/payment-methods/payment-methods';
+@import '../../components/account/payment-methods/card/card';
 @import '../../components/added-services-list/added-services-list';
 @import '../../components/boolean-config/boolean-config';
 @import '../../components/budget-chart/budget-chart';
@@ -40,6 +43,7 @@
 @import '../../components/file-field/file-field';
 @import '../../components/generic-button/generic-button';
 @import '../../components/generic-input/generic-input';
+@import '../../components/header-help/header-help';
 @import '../../components/header-search/header-search';
 @import '../../components/model-actions/model-actions';
 @import '../../components/header-breadcrumb/header-breadcrumb';

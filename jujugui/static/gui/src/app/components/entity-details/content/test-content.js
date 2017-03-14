@@ -26,7 +26,7 @@ chai.config.truncateThreshold = 0;
 function _generateTagItem(tag, fn) {
   return [
     <li key={tag + 0}>
-      <a data-id={tag} onClick={fn}>{tag}</a>
+      <a data-id={tag} className="link" onClick={fn}>{tag}</a>
     </li>
   ];
 }
@@ -53,7 +53,7 @@ describe('EntityContent', function() {
     var getFile = sinon.spy();
     var changeState = sinon.spy();
     var pluralize = sinon.spy();
-    mockEntity.set('resources', {resource: 'one'});
+    mockEntity.set('resources', [{resource: 'one'}]);
     var renderer = jsTestUtils.shallowRender(
         <juju.components.EntityContent
           apiUrl={apiUrl}
@@ -90,30 +90,6 @@ describe('EntityContent', function() {
                 {_generateTagItem('database', instance._handleTagClick)}
               </ul>
             </div>
-            <div className="four-col entity-content__metadata last-col">
-              <h4>More information</h4>
-              <ul>
-                <li>
-                  <a
-                    href="https://bugs.launchpad.net/charms/+source/django"
-                    target="_blank">
-                    Bugs
-                  </a>
-                </li>
-                <li>
-                  <a href={'https://bugs.launchpad.net/charms/+source/' +
-                    'django/+filebug'} target="_blank">
-                    Submit a bug
-                  </a>
-                </li>
-                <li>
-                  <a href={'https://code.launchpad.net/~charmers/charms/' +
-                    'trusty/django/trunk'} target="_blank">
-                    Contribute
-                  </a>
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
         {undefined}
@@ -126,9 +102,24 @@ describe('EntityContent', function() {
                 getFile={getFile} />
             </div>
             <div className="four-col">
+              <div className="section">
+                <h3 className="section__title">
+                  Contribute
+                </h3>
+                <ul className="section__links">
+                  <li>
+                    <a href="https://bugs.launchpad.net/charms/+source/django"
+                      className="link"
+                      target="_blank">
+                      Submit a bug
+                    </a>
+                  </li>
+                  {undefined}
+                </ul>
+              </div>
               <juju.components.EntityResources
                 pluralize={pluralize}
-                resources={{resource: 'one'}} />
+                resources={[{resource: 'one'}]} />
               <juju.components.EntityContentRelations
                 changeState={changeState}
                 relations={mockEntity.get('relations')} />
@@ -138,7 +129,6 @@ describe('EntityContent', function() {
                 pluralize={pluralize} />
               <juju.components.EntityContentRevisions
                 revisions={mockEntity.get('revisions')} />
-              {undefined}
             </div>
           </div>
         </div>
@@ -161,6 +151,45 @@ describe('EntityContent', function() {
       </div>
     );
     assert.deepEqual(output, expected);
+  });
+
+  it('can display a charm with actions', function() {
+    mockEntity.set('bugUrl', 'http://example.com/bugs');
+    mockEntity.set('homepage', 'http://example.com/');
+    const renderer = jsTestUtils.shallowRender(
+        <juju.components.EntityContent
+          apiUrl="http://example.com"
+          changeState={sinon.stub()}
+          entityModel={mockEntity}
+          getFile={sinon.stub()}
+          hasPlans={false}
+          pluralize={sinon.stub()}
+          renderMarkdown={sinon.stub()} />, true);
+    const output = renderer.getRenderOutput();
+    const expected = (
+      <div className="section">
+        <h3 className="section__title">
+          Contribute
+        </h3>
+        <ul className="section__links">
+          <li>
+            <a href="http://example.com/bugs"
+              className="link"
+              target="_blank">
+              Submit a bug
+            </a>
+          </li>
+          <li>
+            <a href="http://example.com/"
+              className="link"
+              target="_blank">
+              Project homepage
+            </a>
+          </li>
+        </ul>
+      </div>);
+    var parent = output.props.children[2].props.children.props.children[1];
+    assert.deepEqual(parent.props.children[0], expected);
   });
 
   it('can display a charm with no options', function() {
@@ -194,30 +223,6 @@ describe('EntityContent', function() {
                 {_generateTagItem('database', instance._handleTagClick)}
               </ul>
             </div>
-            <div className="four-col entity-content__metadata last-col">
-              <h4>More information</h4>
-              <ul>
-                <li>
-                  <a
-                    href="https://bugs.launchpad.net/charms/+source/django"
-                    target="_blank">
-                    Bugs
-                  </a>
-                </li>
-                <li>
-                  <a href={'https://bugs.launchpad.net/charms/+source/' +
-                    'django/+filebug'} target="_blank">
-                    Submit a bug
-                  </a>
-                </li>
-                <li>
-                  <a href={'https://code.launchpad.net/~charmers/charms/' +
-                    'trusty/django/trunk'} target="_blank">
-                    Contribute
-                  </a>
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
         {undefined}
@@ -230,6 +235,21 @@ describe('EntityContent', function() {
                 getFile={getFile} />
             </div>
             <div className="four-col">
+              <div className="section">
+                <h3 className="section__title">
+                  Contribute
+                </h3>
+                <ul className="section__links">
+                  <li>
+                    <a href="https://bugs.launchpad.net/charms/+source/django"
+                      className="link"
+                      target="_blank">
+                      Submit a bug
+                    </a>
+                  </li>
+                  {undefined}
+                </ul>
+              </div>
               <juju.components.EntityResources
                 pluralize={pluralize}
                 resources={undefined} />
@@ -242,7 +262,6 @@ describe('EntityContent', function() {
                 pluralize={pluralize} />
               <juju.components.EntityContentRevisions
                 revisions={mockEntity.get('revisions')} />
-              {undefined}
             </div>
           </div>
         </div>
@@ -252,13 +271,13 @@ describe('EntityContent', function() {
     assert.deepEqual(output, expected);
   });
 
-  it('can display a bundle', function() {
+  it('can display a bundle for Juju 1', function() {
     var apiUrl = 'http://example.com';
     var renderMarkdown = sinon.spy();
     var getFile = sinon.spy();
     var changeState = sinon.spy();
     var pluralize = sinon.spy();
-    var mockEntity = jsTestUtils.makeEntity(true);
+    var mockEntity = jsTestUtils.makeEntity(true, null, true);
     var output = jsTestUtils.shallowRender(
         <juju.components.EntityContent
           apiUrl={apiUrl}
@@ -266,6 +285,7 @@ describe('EntityContent', function() {
           entityModel={mockEntity}
           getFile={getFile}
           hasPlans={false}
+          isLegacyJuju={true}
           pluralize={pluralize}
           renderMarkdown={renderMarkdown} />);
     var expected = (
@@ -281,6 +301,22 @@ describe('EntityContent', function() {
                 getFile={getFile} />
             </div>
             <div className="four-col">
+              <div className="section">
+                <h3 className="section__title">
+                  Contribute
+                </h3>
+                <ul className="section__links">
+                  {undefined}
+                  <li>
+                    <a href={'https://code.launchpad.net/~charmers/charms/' +
+                      'bundles/django-cluster/bundle'}
+                      className="link"
+                      target="_blank">
+                      Project homepage
+                    </a>
+                  </li>
+                </ul>
+              </div>
               {undefined}
               {undefined}
               <juju.components.EntityFiles
@@ -289,16 +325,6 @@ describe('EntityContent', function() {
                 pluralize={pluralize} />
               <juju.components.EntityContentRevisions
                 revisions={mockEntity.get('revisions')} />
-              <div className="section">
-                <h3 className="section__title">
-                  Actions
-                </h3>
-                <a href={'https://code.launchpad.net/~charmers/charms/'+
-                  'bundles/django-cluster/bundle'}
-                  target="_blank">
-                  Contribute
-                </a>
-              </div>
             </div>
           </div>
         </div>
@@ -375,7 +401,7 @@ describe('EntityContent', function() {
                   </div>
                   <dl className="entity-content__bundle-config-options">
                     {[<div key="none">
-                      No config options for this service.
+                      Config options not modified in this bundle.
                     </div>]}
                   </dl>
                 </juju.components.ExpandingRow>
@@ -386,6 +412,190 @@ describe('EntityContent', function() {
       </div>
     );
     assert.deepEqual(output, expected);
+  });
+
+  it('can display a bundle for Juju 2', function() {
+    var apiUrl = 'http://example.com';
+    var renderMarkdown = sinon.spy();
+    var getFile = sinon.spy();
+    var changeState = sinon.spy();
+    var pluralize = sinon.spy();
+    var mockEntity = jsTestUtils.makeEntity(true, null, false);
+    var output = jsTestUtils.shallowRender(
+        <juju.components.EntityContent
+          apiUrl={apiUrl}
+          changeState={changeState}
+          entityModel={mockEntity}
+          getFile={getFile}
+          hasPlans={false}
+          isLegacyJuju={false}
+          pluralize={pluralize}
+          renderMarkdown={renderMarkdown} />);
+    var expected = (
+      <div className="entity-content">
+        {undefined}
+        {undefined}
+        <div className="row">
+          <div className="inner-wrapper">
+            <div className="seven-col append-one">
+              <juju.components.EntityContentReadme
+                entityModel={mockEntity}
+                renderMarkdown={renderMarkdown}
+                getFile={getFile} />
+            </div>
+            <div className="four-col">
+              <div className="section">
+                <h3 className="section__title">
+                  Contribute
+                </h3>
+                <ul className="section__links">
+                  {undefined}
+                  <li>
+                    <a href={'https://code.launchpad.net/~charmers/charms/' +
+                      'bundles/django-cluster/bundle'}
+                      className="link"
+                      target="_blank">
+                      Project homepage
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              {undefined}
+              {undefined}
+              <juju.components.EntityFiles
+                apiUrl={apiUrl}
+                entityModel={mockEntity}
+                pluralize={pluralize} />
+              <juju.components.EntityContentRevisions
+                revisions={mockEntity.get('revisions')} />
+            </div>
+          </div>
+        </div>
+        <div id="configuration"
+          className="row row--grey entity-content__configuration">
+          <div className="inner-wrapper">
+            <div className="twelve-col">
+              <h2 className="entity-content__header">Configuration</h2>
+              <ul>
+                <juju.components.ExpandingRow
+                  classes={{
+                    'entity-content__bundle-config': true
+                  }}
+                  key="gunicorn">
+                  <div className="entity-content__bundle-config-title">
+                    gunicorn
+                    <div className="entity-content__bundle-config-chevron">
+                      <div className="entity-content__bundle-config-expand">
+                        <juju.components.SvgIcon
+                          name="chevron_down_16"
+                          size="16" />
+                      </div>
+                      <div className="entity-content__bundle-config-contract">
+                        <juju.components.SvgIcon
+                          name="chevron_up_16"
+                          size="16" />
+                      </div>
+                    </div>
+                  </div>
+                  <dl className="entity-content__bundle-config-options">
+                    {[<div className="entity-content__config-option"
+                      key="name0">
+                      <dt className="entity-content__config-name">
+                        name
+                      </dt>
+                      <dd className="entity-content__config-description">
+                        <p>
+                          title
+                        </p>
+                      </dd>
+                    </div>,
+                    <div className="entity-content__config-option"
+                      key="active1">
+                      <dt className="entity-content__config-name">
+                        active
+                      </dt>
+                      <dd className="entity-content__config-description">
+                        <p>
+                          {true}
+                        </p>
+                      </dd>
+                    </div>]}
+                  </dl>
+                </juju.components.ExpandingRow>
+                <juju.components.ExpandingRow
+                  classes={{
+                    'entity-content__bundle-config': true
+                  }}
+                  key="django">
+                  <div className="entity-content__bundle-config-title">
+                    django
+                    <div className="entity-content__bundle-config-chevron">
+                      <div className="entity-content__bundle-config-expand">
+                        <juju.components.SvgIcon
+                          name="chevron_down_16"
+                          size="16" />
+                      </div>
+                      <div className="entity-content__bundle-config-contract">
+                        <juju.components.SvgIcon
+                          name="chevron_up_16"
+                          size="16" />
+                      </div>
+                    </div>
+                  </div>
+                  <dl className="entity-content__bundle-config-options">
+                    {[<div key="none">
+                      Config options not modified in this bundle.
+                    </div>]}
+                  </dl>
+                </juju.components.ExpandingRow>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+    assert.deepEqual(output, expected);
+  });
+
+  it('can display a bundle with actions', function() {
+    mockEntity = jsTestUtils.makeEntity(true, null, false);
+    mockEntity.set('bugUrl', 'http://example.com/bugs');
+    mockEntity.set('homepage', 'http://example.com/');
+    const renderer = jsTestUtils.shallowRender(
+        <juju.components.EntityContent
+          apiUrl="http://example.com"
+          changeState={sinon.stub()}
+          entityModel={mockEntity}
+          getFile={sinon.stub()}
+          hasPlans={false}
+          isLegacyJuju={false}
+          pluralize={sinon.stub()}
+          renderMarkdown={sinon.stub()} />, true);
+    const output = renderer.getRenderOutput();
+    const expected = (
+      <div className="section">
+        <h3 className="section__title">
+          Contribute
+        </h3>
+        <ul className="section__links">
+          <li>
+            <a href="http://example.com/bugs"
+              className="link"
+              target="_blank">
+              Submit a bug
+            </a>
+          </li>
+          <li>
+            <a href="http://example.com/"
+              className="link"
+              target="_blank">
+              Project homepage
+            </a>
+          </li>
+        </ul>
+      </div>);
+    var parent = output.props.children[2].props.children.props.children[1];
+    assert.deepEqual(parent.props.children[0], expected);
   });
 
   it('doesn\'t show relations when they don\'t exist', function() {
@@ -406,7 +616,7 @@ describe('EntityContent', function() {
           renderMarkdown={renderMarkdown} />, true);
     var output = renderer.getRenderOutput();
     var parent = output.props.children[2].props.children.props.children[1];
-    var relationsComponent = parent.props.children[1];
+    var relationsComponent = parent.props.children[2];
     assert.equal(relationsComponent, undefined);
   });
 

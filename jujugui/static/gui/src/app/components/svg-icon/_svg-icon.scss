@@ -1,6 +1,6 @@
 .svg-icon {
   // Set a default stroke colour for any icon that has stroke: inherit.
-  stroke: $warm-grey;
+  stroke: $dark-warm-grey;
 }
 
 // scss-lint:disable IdSelector, SelectorFormat
@@ -24,6 +24,7 @@
 #relations path,
 #changes-machine-created path,
 #export_16 path,
+#help_16 path,
 #import_16 path,
 #share_16 path,
 #add_16 path,

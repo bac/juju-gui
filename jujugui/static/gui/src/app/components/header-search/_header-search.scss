@@ -1,8 +1,8 @@
 .header-search {
   $transition-duration: .3s;
   background-color: transparent;
-  color: $warm-grey;
-  padding: 11px 12px;
+  color: $dark-warm-grey;
+  padding: 12px;
   transition: background-color $transition-duration;
 
   &--active {
@@ -10,7 +10,7 @@
     box-shadow: 0 -4px 4.95px .05px rgba(51, 51, 51, .2);
     position: relative;
     z-index: index($z-indexed-elements, header-search--active);
-    
+
     .header-search__search--mobile {
       display: none;
     }
@@ -24,15 +24,15 @@
       &:active,
       &:hover {
         &::-webkit-input-placeholder {
-          color: $warm-grey;
+          color: $dark-warm-grey;
         }
 
         &::-moz-placeholder {
-          color: $warm-grey;
+          color: $dark-warm-grey;
         }
 
         &:-ms-input-placeholder {
-          color: $warm-grey;
+          color: $dark-warm-grey;
         }
       }
     }
@@ -49,7 +49,7 @@
     left: 15px;
     padding: 0;
     position: absolute;
-    top: 11px;
+    top: 10px;
 
     &:focus,
     &:active,
@@ -64,12 +64,12 @@
     border: 1px solid $mid-grey;
     border-radius: $border-radius;
     width: 236px;
-    height: 25px;
+    height: 22px;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
   }
 
   .svg-icon {
-    fill: $warm-grey;
+    fill: $dark-warm-grey;
     transition: fill $transition-duration;
   }
 
@@ -79,7 +79,7 @@
     right: 12px;
     top: 12px;
     border-left: 1px solid $mid-grey;
-    padding: 15px;
+    padding: 14px;
     line-height: 15px;
 
     &:focus,

@@ -23,17 +23,20 @@ YUI.add('deployment-flow', function() {
   juju.components.DeploymentFlow = React.createClass({
     propTypes: {
       acl: React.PropTypes.object.isRequired,
+      addAgreement: React.PropTypes.func.isRequired,
+      addNotification: React.PropTypes.func.isRequired,
+      applications: React.PropTypes.array.isRequired,
       changeState: React.PropTypes.func.isRequired,
       changes: React.PropTypes.object.isRequired,
       changesFilterByParent: React.PropTypes.func.isRequired,
       charmsGetById: React.PropTypes.func.isRequired,
+      charmstore: React.PropTypes.object.isRequired,
       cloud: React.PropTypes.object,
       credential: React.PropTypes.string,
       deploy: React.PropTypes.func.isRequired,
-      environment: React.PropTypes.object.isRequired,
       generateAllChangeDescriptions: React.PropTypes.func.isRequired,
       generateCloudCredentialName: React.PropTypes.func.isRequired,
-      getAgreements: React.PropTypes.func.isRequired,
+      getAgreementsByTerms: React.PropTypes.func.isRequired,
       getAuth: React.PropTypes.func.isRequired,
       getCloudCredentialNames: React.PropTypes.func,
       getCloudCredentials: React.PropTypes.func,
@@ -52,17 +55,16 @@ YUI.add('deployment-flow', function() {
       region: React.PropTypes.string,
       sendPost: React.PropTypes.func,
       servicesGetById: React.PropTypes.func.isRequired,
+      setModelName: React.PropTypes.func.isRequired,
       showTerms: React.PropTypes.func.isRequired,
+      storeUser: React.PropTypes.func.isRequired,
       updateCloudCredential: React.PropTypes.func,
       updateModelName: React.PropTypes.func,
       withPlans: React.PropTypes.bool
     },
 
-    getDefaultProps: function() {
-      return {applications: []};
-    },
-
     getInitialState: function() {
+      this.xhrs = [];
       // Set up the cloud, credential and region from props, as if they exist at
       // mount they can't be changed.
       const modelCommitted = this.props.modelCommitted;
@@ -70,14 +72,22 @@ YUI.add('deployment-flow', function() {
         cloud: modelCommitted ? this.props.cloud : null,
         deploying: false,
         credential: this.props.credential,
+        loadingTerms: false,
         loggedIn: !!this.props.getAuth(),
         modelName: this.props.modelName,
+        newTerms: [],
         region: this.props.region,
         showChangelogs: false,
         sshKey: null,
-        terms: this._getTerms(),
+        // The list of term ids for the uncommitted applications.
+        terms: this._getTerms() || [],
+        // Whether the user has ticked the checked to agree to terms.
         termsAgreed: false
       };
+    },
+
+    componentWillMount: function() {
+      this._getAgreements();
     },
 
     componentDidMount: function() {
@@ -85,6 +95,23 @@ YUI.add('deployment-flow', function() {
       if (modelName) {
         modelName.focus();
       }
+    },
+
+    componentWillReceiveProps: function(nextProps) {
+      const newApps = nextProps.applications;
+      const currentApps = this.props.applications;
+      // Filter the list of new apps to find that don't exist in the current
+      // list of apps.
+      const appDiff = newApps.filter(a => currentApps.indexOf(a) === -1);
+      if (newApps.length !== currentApps.length || appDiff.length > 0) {
+        this._getAgreements();
+      }
+    },
+
+    componentWillUnmount: function() {
+      this.xhrs.forEach((xhr) => {
+        xhr && xhr.abort && xhr.abort();
+      });
     },
 
     /**
@@ -109,11 +136,6 @@ YUI.add('deployment-flow', function() {
           completed = false;
           disabled = false;
           visible = !isLegacyJuju && willCreateModel;
-          break;
-        case 'login':
-          completed = this.state.loggedIn;
-          disabled = false;
-          visible = !isLegacyJuju && !this.state.loggedIn;
           break;
         case 'cloud':
           completed = hasCloud && hasCredential;
@@ -153,10 +175,10 @@ YUI.add('deployment-flow', function() {
           visible = true;
           break;
         case 'agreements':
-          const terms = this.state.terms;
+          const newTerms = this.state.newTerms;
           completed = false;
-          disabled = false;
-          visible = terms && terms.length > 0;
+          disabled = !hasCloud || !hasCredential;
+          visible = newTerms && newTerms.length > 0;
           break;
       }
       return {
@@ -302,7 +324,33 @@ YUI.add('deployment-flow', function() {
       if (this.state.sshKey) {
         args.config = {'authorized-keys': this.state.sshKey};
       }
-      this.props.deploy(this._handleClose, true, this.state.modelName, args);
+      const deploy = this.props.deploy.bind(
+        this, this._handleClose, true, this.state.modelName, args);
+      if (this.state.newTerms.length > 0) {
+        const terms = this.state.newTerms.map(term => {
+          const args = {
+            name: term.name,
+            revision: term.revision
+          };
+          if (term.owner) {
+            args.owner = term.owner;
+          }
+          return args;
+        });
+        this.props.addAgreement(terms, (error, response) => {
+          if (error) {
+            this.props.addNotification({
+              title: 'Could not agree to terms',
+              message: `Could not agree to terms: ${error}`,
+              level: 'error'
+            });
+            return;
+          }
+          deploy();
+        });
+      } else {
+        deploy();
+      }
     },
 
     /**
@@ -313,11 +361,12 @@ YUI.add('deployment-flow', function() {
     */
     _getTerms: function() {
       const appIds = [];
-      // Find the undeployed app IDs.
+      // Get the list of undeployed apps. _deploy is the key for added apps.
       const deployCommands = this.props.groupedChanges['_deploy'];
       if (!deployCommands) {
         return;
       }
+      // Find the undeployed app IDs.
       Object.keys(deployCommands).forEach(key => {
         appIds.push(deployCommands[key].command.args[0].charmURL);
       }) || [];
@@ -337,6 +386,74 @@ YUI.add('deployment-flow', function() {
         }
       });
       return termIds;
+    },
+
+    /**
+      Get the list of terms that the user has already agreed to.
+
+      @method _getAgreements
+    */
+    _getAgreements: function() {
+      // Get the list of terms for the uncommitted apps.
+      const terms = this.state.terms;
+      // If there are no charms with terms then we don't need to display
+      // anything.
+      if (terms.length === 0) {
+        this.setState({newTerms: [], loadingTerms: false});
+        return;
+      }
+      this.setState({loadingTerms: true}, () => {
+        // Get the terms the user has not yet agreed to.
+        const xhr = this.props.getAgreementsByTerms(
+          terms, (error, agreements) => {
+            if (error) {
+              this.props.addNotification({
+                title: 'Problem loading terms',
+                message: `Problem loading terms: ${error}`,
+                level: 'error'
+              });
+              console.error('Problem loading terms:', error);
+              return;
+            }
+            this.setState({newTerms: agreements || [], loadingTerms: false});
+          });
+        this.xhrs.push(xhr);
+      });
+    },
+
+    /**
+      Split the term id into the attributes.
+
+      @method _parseTermId
+      @returns {Object} The term attributes.
+    */
+    _parseTermId: function(terms) {
+      const parts = terms.split('/');
+      let owner = null;
+      let name = null;
+      let revision = null;
+      if (parts.length === 3) {
+        // The string must be in the format `owner/name/id`;
+        owner = parts[0];
+        name = parts[1];
+        revision = parseInt(parts[2]);
+      } else if (parts.length === 1) {
+        // The string must be in the format `name`;
+        name = parts[0];
+      } else if (!isNaN(parts[1])) {
+        // The string must be in the format `name/id`;
+        name = parts[0];
+        revision = parseInt(parts[1]);
+      } else {
+        // The string must be in the format `owner/name`;
+        owner = parts[0];
+        name = parts[1];
+      }
+      return {
+        owner: owner,
+        name: name,
+        revision: revision
+      };
     },
 
     /**
@@ -429,7 +546,7 @@ YUI.add('deployment-flow', function() {
                 regex: /\S+/,
                 error: 'This field is required.'
               }, {
-                regex: /^([a-z0-9]([a-z0-9.-]*[a-z0-9])?)?$/,
+                regex: /^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$/,
                 error: 'This field must only contain lowercase ' +
                   'letters, numbers, and hyphens. It must not start or ' +
                   'end with a hyphen.'
@@ -449,7 +566,7 @@ YUI.add('deployment-flow', function() {
       const modelName = this.refs.modelName.getValue();
       this.setState({modelName: modelName});
       if (modelName !== '') {
-        this.props.environment.set('name', modelName);
+        this.props.setModelName(modelName);
       }
     },
 
@@ -460,10 +577,6 @@ YUI.add('deployment-flow', function() {
       @returns {Object} The markup.
     */
     _generateLogin: function() {
-      var status = this._getSectionStatus('login');
-      if (!status.visible) {
-        return;
-      }
       const callback = err => {
         if (!err) {
           this.setState({loggedIn: true});
@@ -472,34 +585,64 @@ YUI.add('deployment-flow', function() {
       return (
         <juju.components.DeploymentSection
           instance="deployment-model-login"
-          showCheck={false}>
-          <div className="six-col">
-            <juju.components.USSOLoginLink
-              gisf={this.props.gisf}
-              callback={callback}
-              displayType={'button'}
-              sendPost={this.props.sendPost}
-              getDischargeToken={this.props.getDischargeToken}
-              loginToController={this.props.loginToController}/>
+          showCheck={true}
+          title="You're almost ready to deploy!">
+          <div className="twelve-col">
+            <p className="deployment-login__intro">
+              You will need to sign in with an Ubuntu One account to deploy
+              your model with Juju-as-a-Service.
+            </p>
+            <div className="deployment-login__features">
+              <div className="six-col">
+                <div className="deployment-login__feature">
+                  <juju.components.SvgIcon name="task-done_16" size="16" />
+                  Deploy to all major clouds directly from your browser.
+                </div>
+                <div className="deployment-login__feature">
+                  <juju.components.SvgIcon name="task-done_16" size="16" />
+                  Identity management across all models.
+                </div>
+              </div>
+              <div className="six-col last-col">
+                <div className="deployment-login__feature">
+                  <juju.components.SvgIcon name="task-done_16" size="16" />
+                  Hosted and managed juju controllers.
+                </div>
+                <div className="deployment-login__feature">
+                  <juju.components.SvgIcon name="task-done_16" size="16" />
+                  Reusable shareable models with unlimited users.
+                </div>
+              </div>
+            </div>
+            <div className="deployment-login__login">
+              <juju.components.USSOLoginLink
+                gisf={this.props.gisf}
+                charmstore={this.props.charmstore}
+                callback={callback}
+                displayType={'button'}
+                sendPost={this.props.sendPost}
+                storeUser={this.props.storeUser}
+                getDischargeToken={this.props.getDischargeToken}
+                loginToController={this.props.loginToController}>
+                Login
+              </juju.components.USSOLoginLink>
+            </div>
+            <div className="deployment-login__signup">
+              Don't have an account?
+              <juju.components.USSOLoginLink
+                gisf={this.props.gisf}
+                charmstore={this.props.charmstore}
+                callback={callback}
+                displayType={'text'}
+                sendPost={this.props.sendPost}
+                storeUser={this.props.storeUser}
+                getDischargeToken={this.props.getDischargeToken}
+                loginToController={this.props.loginToController}>
+                Sign up
+              </juju.components.USSOLoginLink>
+            </div>
           </div>
         </juju.components.DeploymentSection>);
-    },
-
-    /**
-      Generate the appropriate cloud title based on the state.
-
-      @method _generateCloudTitle
-      @returns {String} The cloud title.
-    */
-    _generateCloudTitle: function() {
-      var cloud = this.state.cloud;
-      if (!cloud) {
-        return 'Choose cloud to deploy to';
-      } else if (cloud.name === 'local') {
-        return 'Local cloud';
-      } else {
-        return 'Public cloud';
-      }
     },
 
     /**
@@ -521,7 +664,7 @@ YUI.add('deployment-flow', function() {
           disabled={status.disabled}
           instance="deployment-cloud"
           showCheck={true}
-          title={this._generateCloudTitle()}>
+          title="Choose cloud to deploy to">
           <juju.components.DeploymentCloud
             acl={this.props.acl}
             cloud={cloud}
@@ -619,6 +762,7 @@ YUI.add('deployment-flow', function() {
               this.props.generateAllChangeDescriptions}
             groupedChanges={this.props.groupedChanges}
             listPlansForCharm={this.props.listPlansForCharm}
+            parseTermId={this._parseTermId}
             servicesGetById={this.props.servicesGetById}
             showChangelogs={this.state.showChangelogs}
             showTerms={this.props.showTerms}
@@ -680,7 +824,7 @@ YUI.add('deployment-flow', function() {
     /**
       Handles checking on the "I agree to the terms" checkbox.
 
-      @method _generateAgreementsSection
+      @method _handleTermAgreement
       @param {Object} evt The change event.
     */
     _handleTermsAgreement: function(evt) {
@@ -698,9 +842,14 @@ YUI.add('deployment-flow', function() {
       if (!status.visible) {
         return;
       }
-      const disabled = this.props.acl.isReadOnly();
+      const disabled = this.props.acl.isReadOnly() || status.disabled;
+      const classes = classNames(
+        'deployment-flow__deploy-option',
+        {
+          'deployment-flow__deploy-option--disabled' : status.disabled
+        });
       return (
-        <div className="deployment-flow__deploy-option">
+        <div className={classes}>
           <input className="deployment-flow__deploy-checkbox"
             onChange={this._handleTermsAgreement}
             disabled={disabled}
@@ -732,13 +881,21 @@ YUI.add('deployment-flow', function() {
       if (!this.state.cloud) {
         return false;
       }
+      // Check that we have credentials selected.
+      if (!this.state.credential) {
+        return false;
+      }
       // Check that the user can deploy and they are not already deploying.
       if (this.props.acl.isReadOnly() || this.state.deploying) {
         return false;
       }
       // Check that any terms have been agreed to.
-      const terms = this.state.terms;
-      if (terms && terms.length > 0 && !this.state.termsAgreed) {
+      const newTerms = this.state.newTerms;
+      if (newTerms && newTerms.length > 0 && !this.state.termsAgreed) {
+        return false;
+      }
+      // Check that the terms are not still loading.
+      if (this.state.loadingTerms) {
         return false;
       }
       // That's all we need if the model already exists.
@@ -758,33 +915,42 @@ YUI.add('deployment-flow', function() {
 
     render: function() {
       const deployTitle = this.state.deploying ? 'Deploying...' : 'Deploy';
-      return (
-        <juju.components.DeploymentPanel
-          changeState={this.props.changeState}
-          title={this.props.modelName}>
-          {this._generateModelNameSection()}
-          {this._generateLogin()}
-          {this._generateCloudSection()}
-          {this._generateCredentialSection()}
-          {this._generateSSHKeySection()}
-          {this._generateMachinesSection()}
-          {this._generateServicesSection()}
-          {this._generateBudgetSection()}
-          {this._generateChangeSection()}
-          <div className="twelve-col">
-            <div className="deployment-flow__deploy">
-              {this._generateAgreementsSection()}
-              <div className="deployment-flow__deploy-action">
-                <juju.components.GenericButton
-                  action={this._handleDeploy}
-                  disabled={!this._deploymentAllowed()}
-                  type="positive"
-                  title={deployTitle} />
+      if (this.props.isLegacyJuju || this.state.loggedIn) {
+        return (
+          <juju.components.DeploymentPanel
+            changeState={this.props.changeState}
+            title={this.props.modelName}>
+            {this._generateModelNameSection()}
+            {this._generateCloudSection()}
+            {this._generateCredentialSection()}
+            {this._generateSSHKeySection()}
+            {this._generateMachinesSection()}
+            {this._generateServicesSection()}
+            {this._generateBudgetSection()}
+            {this._generateChangeSection()}
+            <div className="twelve-col">
+              <div className="deployment-flow__deploy">
+                {this._generateAgreementsSection()}
+                <div className="deployment-flow__deploy-action">
+                  <juju.components.GenericButton
+                    action={this._handleDeploy}
+                    disabled={!this._deploymentAllowed()}
+                    type="positive"
+                    title={deployTitle} />
+                </div>
               </div>
             </div>
-          </div>
-        </juju.components.DeploymentPanel>
-      );
+          </juju.components.DeploymentPanel>
+        );
+      } else {
+        return (
+          <juju.components.DeploymentPanel
+            changeState={this.props.changeState}
+            title={this.props.modelName}>
+            {this._generateLogin()}
+          </juju.components.DeploymentPanel>
+        );
+      }
     }
 
   });

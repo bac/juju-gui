@@ -21,7 +21,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 var juju = {components: {}}; // eslint-disable-line no-unused-vars
 
 describe('UserProfileModelList', () => {
-  let models, user;
+  let models, userInfo;
 
   beforeAll((done) => {
     // By loading this file it adds the component to the juju components.
@@ -31,16 +31,16 @@ describe('UserProfileModelList', () => {
   beforeEach(() => {
     models = [{
       uuid: 'model1',
-      name: 'spinach/sandbox',
+      name: 'spinach',
       lastConnection: '2016-09-12T15:42:09Z',
       ownerTag: 'user-who',
       owner: 'who',
+      cloud: 'aws',
+      region: 'gallifrey',
+      numMachines: 42,
       isAlive: true
     }];
-    user = {
-      user: 'user-who',
-      usernameDisplay: 'test owner'
-    };
+    userInfo = {external: 'who-ext', profile: 'who', isCurrent: true};
   });
 
   it('renders the empty state', () => {
@@ -56,19 +56,61 @@ describe('UserProfileModelList', () => {
         currentModel={'model1'}
         listModelsWithInfo={sinon.stub().callsArgWith(0, null, [])}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     const output = component.getRenderOutput();
     const expected = (
       <div className="user-profile__model-list">
         <div className="user-profile__header twelve-col no-margin-bottom">
-          Models
-          <span className="user-profile__size">
-            ({0})
-          </span>
-          <juju.components.CreateModelButton
-            changeState={changeState}
-            switchModel={instance.props.switchModel} />
+          <div className="left">
+            Models
+            <span className="user-profile__size">
+              ({0})
+            </span>
+          </div>
+          <div className="right">
+            <juju.components.CreateModelButton
+              changeState={changeState}
+              switchModel={instance.props.switchModel} />
+          </div>
+        </div>
+        {undefined}
+        {undefined}
+      </div>
+    );
+    assert.deepEqual(output, expected);
+  });
+
+  it('does not show the create model button if not current user', () => {
+    const acl = {
+      canAddModels: () => true
+    };
+    userInfo = {external: 'who-ext', profile: 'who', isCurrent: false};
+    const changeState = sinon.stub();
+    const component = jsTestUtils.shallowRender(
+      <juju.components.UserProfileModelList
+        acl={acl}
+        addNotification={sinon.stub()}
+        changeState={changeState}
+        currentModel={'model1'}
+        listModelsWithInfo={sinon.stub().callsArgWith(0, null, [])}
+        switchModel={sinon.stub()}
+        userInfo={userInfo}
+      />, true);
+    const output = component.getRenderOutput();
+    const expected = (
+      <div className="user-profile__model-list">
+        <div className="user-profile__header twelve-col no-margin-bottom">
+          <div className="left">
+            Models shared with you
+            <span className="user-profile__size">
+              ({0})
+            </span>
+          </div>
+          <div className="right">
+            {undefined}
+          </div>
         </div>
         {undefined}
         {undefined}
@@ -85,7 +127,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={sinon.stub()}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const output = component.getRenderOutput();
     assert.deepEqual(output, (
       <div className="user-profile__model-list twelve-col">
@@ -110,20 +153,25 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     const output = component.getRenderOutput();
     const content = output.props.children[1].props.children;
     const expected = (
       <div className="user-profile__model-list">
         <div className="user-profile__header twelve-col no-margin-bottom">
-          Models
-          <span className="user-profile__size">
-            ({1})
-          </span>
-          <juju.components.CreateModelButton
-            changeState={changeState}
-            switchModel={instance.props.switchModel} />
+          <div className="left">
+            Models
+            <span className="user-profile__size">
+              ({1})
+            </span>
+          </div>
+          <div className="right">
+            <juju.components.CreateModelButton
+              changeState={changeState}
+              switchModel={instance.props.switchModel} />
+          </div>
         </div>
         <ul className="user-profile__list twelve-col">
           <li className="user-profile__list-header twelve-col">
@@ -131,13 +179,13 @@ describe('UserProfileModelList', () => {
               Name
             </span>
             <span className="user-profile__list-col four-col">
-              Credential
+              Cloud/Region
             </span>
             <span className="user-profile__list-col two-col">
               Last accessed
             </span>
             <span className="user-profile__list-col one-col">
-              Units
+              Machines
             </span>
             <span className={
               'user-profile__list-col two-col last-col'}>
@@ -152,10 +200,10 @@ describe('UserProfileModelList', () => {
             switchModel={instance.props.switchModel}
             type="model">
             <span className="user-profile__list-col three-col">
-              spinach/sandbox
+              spinach
             </span>
             <span className="user-profile__list-col four-col">
-              --
+              aws/gallifrey
             </span>
             <span className="user-profile__list-col two-col">
               <juju.components.DateDisplay
@@ -163,10 +211,115 @@ describe('UserProfileModelList', () => {
                 relative={true}/>
             </span>
             <span className="user-profile__list-col one-col">
-              --
+              {42}
             </span>
             <span className="user-profile__list-col two-col last-col">
               who
+            </span>
+          </juju.components.UserProfileEntity>]}
+        </ul>
+        {undefined}
+      </div>
+    );
+    assert.deepEqual(output, expected);
+  });
+
+  it('renders a list of models shared with you', () => {
+    models = [{
+      uuid: 'model1-uuid',
+      name: 'model1',
+      lastConnection: '2016-09-12T15:42:09Z',
+      owner: 'who',
+      cloud: 'aws',
+      region: 'gallifrey',
+      numMachines: 42,
+      isAlive: true
+    }, {
+      uuid: 'model2-uuid',
+      name: 'model2',
+      lastConnection: '2016-09-12T15:42:09Z',
+      owner: 'dalek@external',
+      cloud: 'aws',
+      region: 'gallifrey',
+      numMachines: 47,
+      isAlive: true
+    }];
+    userInfo = {external: 'dalek', profile: 'dalek', isCurrent: false};
+    const listModelsWithInfo = sinon.stub().callsArgWith(0, null, models);
+    const acl = {
+      canAddModels: () => true
+    };
+    const changeState = sinon.stub();
+    const component = jsTestUtils.shallowRender(
+      <juju.components.UserProfileModelList
+        acl={acl}
+        addNotification={sinon.stub()}
+        changeState={changeState}
+        currentModel={null}
+        destroyModels={sinon.stub()}
+        facadesExist={true}
+        listModelsWithInfo={listModelsWithInfo}
+        switchModel={sinon.stub()}
+        userInfo={userInfo}
+      />, true);
+    const instance = component.getMountedInstance();
+    const output = component.getRenderOutput();
+    const content = output.props.children[1].props.children;
+    const expected = (
+      <div className="user-profile__model-list">
+        <div className="user-profile__header twelve-col no-margin-bottom">
+          <div className="left">
+            Models shared with you
+            <span className="user-profile__size">
+              ({1})
+            </span>
+          </div>
+          <div className="right">
+            {undefined}
+          </div>
+        </div>
+        <ul className="user-profile__list twelve-col">
+          <li className="user-profile__list-header twelve-col">
+            <span className="user-profile__list-col three-col">
+              Name
+            </span>
+            <span className="user-profile__list-col four-col">
+              Cloud/Region
+            </span>
+            <span className="user-profile__list-col two-col">
+              Last accessed
+            </span>
+            <span className="user-profile__list-col one-col">
+              Machines
+            </span>
+            <span className={
+              'user-profile__list-col two-col last-col'}>
+              Owner
+            </span>
+          </li>
+          {[<juju.components.UserProfileEntity
+            displayConfirmation={content[1][0].props.displayConfirmation}
+            entity={models[1]}
+            expanded={false}
+            key="model2-uuid"
+            switchModel={instance.props.switchModel}
+            type="model">
+            <span className="user-profile__list-col three-col">
+              model2
+            </span>
+            <span className="user-profile__list-col four-col">
+              aws/gallifrey
+            </span>
+            <span className="user-profile__list-col two-col">
+              <juju.components.DateDisplay
+                date='2016-09-12T15:42:09Z'
+                relative={true}/>
+            </span>
+            <span className="user-profile__list-col one-col">
+              {47}
+            </span>
+            <span className="user-profile__list-col two-col last-col">
+              dalek
             </span>
           </juju.components.UserProfileEntity>]}
         </ul>
@@ -186,7 +339,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const output = component.getRenderOutput();
     const content = output.props.children[1].props.children[1][0];
     const classes = 'expanding-row twelve-col user-profile__entity'
@@ -194,7 +348,7 @@ describe('UserProfileModelList', () => {
     const expected = (
       <li className={classes}
         key="model1">
-        {'spinach/sandbox'} is being destroyed.
+        {'spinach'} is being destroyed.
       </li>);
     assert.deepEqual(content, expected);
   });
@@ -211,7 +365,8 @@ describe('UserProfileModelList', () => {
         acl={acl}
         listModelsWithInfo={sinon.stub().callsArgWith(0, null, models)}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const output = component.getRenderOutput();
     assert.isUndefined(output.props.children[0].props.children[2]);
   });
@@ -227,7 +382,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     let output = component.getRenderOutput();
     output.props.children[1].props.children[1][0].props.displayConfirmation();
     output = component.getRenderOutput();
@@ -236,7 +392,7 @@ describe('UserProfileModelList', () => {
         buttons={output.props.children[2].props.buttons}
         title="Destroy model">
         <p>
-          Are you sure you want to destroy spinach/sandbox? All the
+          Are you sure you want to destroy spinach? All the
           applications and units included in the model will be destroyed.
           This action cannot be undone.
         </p>
@@ -260,7 +416,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     instance._displayConfirmation({name: 'spinach/my-model'});
     let output = component.getRenderOutput();
@@ -288,7 +445,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     instance._displayConfirmation({name: 'spinach/my-model'});
     let output = component.getRenderOutput();
@@ -312,7 +470,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     component.getRenderOutput();
     instance._displayConfirmation({name: 'spinach/my-model', uuid: 'my-model'});
@@ -341,7 +500,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     component.getRenderOutput();
     instance._displayConfirmation({name: 'spinach/my-model', uuid: 'my-model'});
@@ -366,7 +526,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     const instance = component.getMountedInstance();
     component.getRenderOutput();
     const model = {
@@ -395,7 +556,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={listModelsWithInfo}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     renderer.unmount();
     assert.equal(listModelsWithInfoAbort.callCount, 1);
   });
@@ -410,7 +572,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={sinon.stub()}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     assert.equal(broadcastStatus.args[0][0], 'starting');
   });
 
@@ -424,7 +587,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={sinon.stub().callsArgWith(0, null, models)}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     assert.equal(broadcastStatus.args[1][0], 'ok');
   });
 
@@ -438,7 +602,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={sinon.stub().callsArgWith(0, null, [])}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     assert.equal(broadcastStatus.args[1][0], 'empty');
   });
 
@@ -452,7 +617,8 @@ describe('UserProfileModelList', () => {
         facadesExist={true}
         listModelsWithInfo={sinon.stub().callsArgWith(0, 'bad wolf', [])}
         switchModel={sinon.stub()}
-        user={user} />, true);
+        userInfo={userInfo}
+      />, true);
     assert.equal(broadcastStatus.args[1][0], 'error');
   });
 });

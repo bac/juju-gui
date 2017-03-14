@@ -102,23 +102,57 @@ describe('Controller API', function() {
     });
   });
 
-  describe('close', () => {
-    it('stops the pinger', function(done) {
+  describe('lifecycle', () => {
+    beforeEach(function() {
       const originalClearInterval = clearInterval;
+      const originalSetInterval = setInterval;
       clearInterval = sinon.stub();
-      this._cleanups.push(() => {
+      setInterval = sinon.stub().returns('mypinger');
+      cleanups.push(() => {
         clearInterval = originalClearInterval;
-      });
-      controllerAPI._pinger = 'I am the pinger';
-      controllerAPI.close(() => {
-        assert.strictEqual(clearInterval.calledOnce, true);
-        const pinger = clearInterval.getCall(0).args[0];
-        assert.strictEqual(pinger, 'I am the pinger');
-        assert.strictEqual(controllerAPI._pinger, null);
-        done();
+        setInterval = originalSetInterval;
       });
     });
 
+    it('starts the pinger when the controller connects', function(done) {
+      controllerAPI.set('connected', false);
+      controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(setInterval.calledOnce, true, 'setInterval');
+        assert.strictEqual(controllerAPI._pinger, 'mypinger');
+        done();
+      });
+      controllerAPI.set('connected', true);
+    });
+
+    it('stops the pinger when the controller disconnects', function(done) {
+      controllerAPI.set('connected', true);
+      const initialPinger = controllerAPI._pinger;
+      assert.notEqual(initialPinger, null);
+      controllerAPI.after('connectedChange', evt => {
+        assert.strictEqual(clearInterval.calledOnce, true, 'clearInterval');
+        const pinger = clearInterval.getCall(0).args[0];
+        assert.strictEqual(pinger, initialPinger);
+        assert.strictEqual(controllerAPI._pinger, null);
+        done();
+      });
+      controllerAPI.set('connected', false);
+    });
+
+    it('stops the pinger when the controller is destroyed', function(done) {
+      const api = new juju.ControllerAPI({conn: conn});
+      api.after('destroy', evt => {
+        assert.strictEqual(setInterval.calledOnce, true, 'setInterval');
+        assert.strictEqual(clearInterval.calledOnce, true, 'clearInterval');
+        const pinger = clearInterval.getCall(0).args[0];
+        assert.strictEqual(pinger, 'mypinger');
+        done();
+      });
+      api.set('connected', true);
+      api.destroy();
+    });
+  });
+
+  describe('close', () => {
     it('resets attributes', done => {
       controllerAPI.setConnectedAttr('controllerAccess', 'test');
       controllerAPI.close(() => {
@@ -654,12 +688,38 @@ describe('Controller API', function() {
         assert.strictEqual(result.series, 'trusty');
         assert.strictEqual(result.provider, 'lxd');
         assert.strictEqual(result.uuid, '5bea955d-7a43-47d3-89dd-b02c923e');
-        assert.strictEqual(result.controllerUUID, '5bea955d-7a43-47d3-89dd');
+        assert.strictEqual(result.credential, 'who');
+        assert.strictEqual(result.region, 'gallifrey');
+        assert.strictEqual(result.cloud, 'aws');
+        assert.strictEqual(result.numMachines, 3);
+        assert.strictEqual(result.users.length, 4);
+        assert.deepEqual(result.users[0], {
+          name: 'who@external',
+          displayName: 'doctor who',
+          domain: 'Ubuntu SSO',
+          lastConnection: new Date('2000-01-01T00:00:00Z'),
+          access: 'admin',
+        });
+        assert.deepEqual(result.users[1], {err: 'bad wolf'});
+        assert.deepEqual(result.users[2], {
+          name: 'admin@local',
+          displayName: 'Admin',
+          domain: 'local',
+          lastConnection: null,
+          access: 'read',
+        });
+        assert.deepEqual(result.users[3], {
+          name: 'dalek@skaro',
+          displayName: 'dalek',
+          domain: 'skaro',
+          lastConnection: null,
+          access: 'write',
+        });
         assert.strictEqual(result.life, 'alive');
         assert.strictEqual(result.owner, 'admin@local');
         assert.strictEqual(result.isAlive, true, 'unexpected zombie model');
-        assert.strictEqual(result.isController, false,
-                           'unexpected controller model');
+        assert.strictEqual(
+          result.isController, false, 'unexpected controller model');
         assert.equal(conn.messages.length, 1);
         assert.deepEqual(conn.last_message(), {
           type: 'ModelManager',
@@ -681,6 +741,25 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-7a43-47d3-89dd-b02c923e',
               'controller-uuid': '5bea955d-7a43-47d3-89dd',
+              'cloud-credential-tag': 'cloudcred-who',
+              'cloud-region': 'gallifrey',
+              'cloud-tag': 'cloud-aws',
+              machines: [1, 2, 3],
+              users: [{
+                user: 'who@external',
+                'display-name': 'doctor who',
+                'last-connection': '2000-01-01T00:00:00Z',
+                access: 'admin',
+              }, {
+                error: {message: 'bad wolf'}
+              }, {
+                user: 'admin',
+                'display-name': 'Admin',
+                access: 'read',
+              }, {
+                user: 'dalek@skaro',
+                access: 'write',
+              }],
               life: 'alive',
               'owner-tag': 'user-admin@local'
             }
@@ -694,8 +773,8 @@ describe('Controller API', function() {
       const id = '5bea955d-7a43-47d3-89dd-b02c923e';
       controllerAPI.modelInfo([id], (err, models) => {
         const result = models[0];
-        assert.strictEqual(result.isController, true,
-                           'unexpected regular model');
+        assert.strictEqual(
+          result.isController, true, 'unexpected regular model');
         done();
       });
       // Mimic response.
@@ -709,6 +788,7 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-7a43-47d3-89dd-b02c923e',
               'controller-uuid': '5bea955d-7a43-47d3-89dd',
+              'cloud-tag': 'cloud-aws',
               life: 'alive',
               'owner-tag': 'user-admin@local'
             }
@@ -731,6 +811,11 @@ describe('Controller API', function() {
         assert.strictEqual(result1.provider, 'lxd');
         assert.strictEqual(result1.uuid, id1);
         assert.strictEqual(result1.controllerUUID, id1);
+        assert.strictEqual(result1.credential, '');
+        assert.strictEqual(result1.region, 'east');
+        assert.strictEqual(result1.cloud, 'lxd');
+        assert.strictEqual(result1.numMachines, 1);
+        assert.deepEqual(result1.users, []);
         assert.strictEqual(result1.life, 'alive');
         assert.strictEqual(result1.owner, 'admin@local');
         assert.strictEqual(result1.isAlive, true, 'unexpected zombie model');
@@ -743,6 +828,11 @@ describe('Controller API', function() {
         assert.strictEqual(result2.provider, 'aws');
         assert.strictEqual(result2.uuid, id2);
         assert.strictEqual(result2.controllerUUID, '5bea955d-7a43-c2');
+        assert.strictEqual(result2.credential, 'dalek');
+        assert.strictEqual(result2.region, null);
+        assert.strictEqual(result2.cloud, 'aws');
+        assert.strictEqual(result2.numMachines, 0);
+        assert.deepEqual(result2.users, []);
         assert.strictEqual(result2.life, 'dying');
         assert.strictEqual(result2.owner, 'dalek@skaro');
         assert.strictEqual(result2.isAlive, false, 'unexpected alive model');
@@ -773,6 +863,9 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: id1,
               'controller-uuid': id1,
+              'cloud-region': 'east',
+              'cloud-tag': 'cloud-lxd',
+              machines: [1],
               life: 'alive',
               'owner-tag': 'user-admin@local'
             }
@@ -783,6 +876,8 @@ describe('Controller API', function() {
               'provider-type': 'aws',
               uuid: id2,
               'controller-uuid': '5bea955d-7a43-c2',
+              'cloud-credential-tag': 'cloudcred-dalek',
+              'cloud-tag': 'cloud-aws',
               life: 'dying',
               'owner-tag': 'user-dalek@skaro'
             }
@@ -834,11 +929,65 @@ describe('Controller API', function() {
       // Mimic response.
       conn.msg({'request-id': 1, response: {results: []}});
     });
+
+    it('retrieves model info for a sandbox model', done => {
+      // Perform the request.
+      const id = 'sandbox1';
+      controllerAPI.modelInfo([id], (err, models) => {
+        assert.strictEqual(err, null);
+        assert.strictEqual(models.length, 1);
+        const result = models[0];
+        assert.strictEqual(result.id, id);
+        assert.strictEqual(result.name, 'sandbox');
+        assert.strictEqual(result.series, 'trusty');
+        assert.strictEqual(result.provider, 'demonstration');
+        assert.strictEqual(result.uuid, 'sandbox1');
+        assert.strictEqual(result.credential, '');
+        assert.strictEqual(result.region, null);
+        assert.strictEqual(result.cloud, '');
+        assert.strictEqual(result.numMachines, 0);
+        assert.deepEqual(result.users, []);
+        assert.strictEqual(result.life, 'alive');
+        assert.strictEqual(result.owner, 'admin@local');
+        assert.strictEqual(result.isAlive, true, 'unexpected zombie model');
+        assert.strictEqual(
+          result.isController, false, 'unexpected controller model');
+        assert.equal(conn.messages.length, 1);
+        assert.deepEqual(conn.last_message(), {
+          type: 'ModelManager',
+          version: 2,
+          request: 'ModelInfo',
+          params: {entities: [{tag: 'model-' + id}]},
+          'request-id': 1
+        });
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {
+          results: [{
+            result: {
+              'default-series': 'trusty',
+              name: 'sandbox',
+              'provider-type': 'demonstration',
+              uuid: 'sandbox1',
+              'controller-uuid': 'controlleruuid1',
+              machines: [],
+              users: [],
+              life: 'alive',
+              'owner-tag': 'user-admin@local'
+            }
+          }]
+        }
+      });
+    });
+
   });
 
   describe('listModelsWithInfo', function() {
     it('info for a single model', done => {
-      controllerAPI.setCredentials({user: 'who', password: 'tardis'});
+      controllerAPI.setCredentials({user: 'who@external', password: 'tardis'});
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, null);
@@ -851,18 +1000,46 @@ describe('Controller API', function() {
         assert.strictEqual(result.provider, 'lxd');
         assert.strictEqual(result.uuid, '5bea955d-1');
         assert.strictEqual(result.controllerUUID, '5bea955d-c');
+        assert.strictEqual(result.credential, 'who');
+        assert.strictEqual(result.region, 'gallifrey');
+        assert.strictEqual(result.cloud, 'aws');
+        assert.strictEqual(result.numMachines, 2);
+        assert.strictEqual(result.users.length, 4);
+        assert.deepEqual(result.users[0], {
+          name: 'who@external',
+          displayName: 'doctor who',
+          domain: 'Ubuntu SSO',
+          lastConnection: new Date('2000-01-01T00:00:00Z'),
+          access: 'admin',
+        });
+        assert.deepEqual(result.users[1], {err: 'bad wolf'});
+        assert.deepEqual(result.users[2], {
+          name: 'admin@local',
+          displayName: 'Admin',
+          domain: 'local',
+          lastConnection: null,
+          access: 'read',
+        });
+        assert.deepEqual(result.users[3], {
+          name: 'dalek@skaro',
+          displayName: 'dalek',
+          domain: 'skaro',
+          lastConnection: null,
+          access: 'write',
+        });
         assert.strictEqual(result.life, 'alive');
         assert.strictEqual(result.owner, 'admin@local');
         assert.strictEqual(result.isAlive, true, 'unexpected zombie model');
         assert.strictEqual(result.isController, false,
                            'unexpected controller model');
-        assert.strictEqual(result.lastConnection, 'today');
+        assert.deepEqual(
+          result.lastConnection, new Date('2000-01-01T00:00:00Z'));
         assert.equal(conn.messages.length, 2);
         assert.deepEqual(conn.messages[0], {
           type: 'ModelManager',
           version: 2,
           request: 'ListModels',
-          params: {tag: 'user-who@local'},
+          params: {tag: 'user-who@external'},
           'request-id': 1
         });
         assert.deepEqual(conn.messages[1], {
@@ -900,6 +1077,25 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-1',
               'controller-uuid': '5bea955d-c',
+              'cloud-credential-tag': 'cloudcred-who',
+              'cloud-region': 'gallifrey',
+              'cloud-tag': 'cloud-aws',
+              machines: [{}, {}],
+              users: [{
+                user: 'who@external',
+                'display-name': 'doctor who',
+                'last-connection': '2000-01-01T00:00:00Z',
+                access: 'admin',
+              }, {
+                error: {message: 'bad wolf'}
+              }, {
+                user: 'admin',
+                'display-name': 'Admin',
+                access: 'read',
+              }, {
+                user: 'dalek@skaro',
+                access: 'write',
+              }],
               life: 'alive',
               'owner-tag': 'user-admin@local'
             }
@@ -923,12 +1119,17 @@ describe('Controller API', function() {
         assert.strictEqual(result1.provider, 'lxd');
         assert.strictEqual(result1.uuid, '5bea955d-1');
         assert.strictEqual(result1.controllerUUID, '5bea955d-c');
+        assert.strictEqual(result1.credential, 'admin');
+        assert.strictEqual(result1.region, 'localhost');
+        assert.strictEqual(result1.cloud, 'lxd');
+        assert.strictEqual(result1.numMachines, 4);
+        assert.deepEqual(result1.users, []);
         assert.strictEqual(result1.life, 'dead');
         assert.strictEqual(result1.owner, 'dalek@local');
         assert.strictEqual(result1.isAlive, false, 'unexpected alive model');
         assert.strictEqual(result1.isController, false,
                            'unexpected admin model');
-        assert.strictEqual(result1.lastConnection, 'today');
+        assert.strictEqual(result1.lastConnection, null);
         const result2 = models[1];
         assert.strictEqual(result2.err, undefined);
         assert.strictEqual(result2.id, '5bea955d-c');
@@ -937,12 +1138,17 @@ describe('Controller API', function() {
         assert.strictEqual(result2.provider, 'lxd');
         assert.strictEqual(result2.uuid, '5bea955d-c');
         assert.strictEqual(result2.controllerUUID, '5bea955d-c');
+        assert.strictEqual(result2.credential, '');
+        assert.strictEqual(result2.region, null);
+        assert.strictEqual(result2.cloud, 'lxd');
+        assert.strictEqual(result2.numMachines, 0);
+        assert.deepEqual(result2.users, []);
         assert.strictEqual(result2.life, 'alive');
         assert.strictEqual(result2.owner, 'who@local');
         assert.strictEqual(result2.isAlive, true, 'unexpected zombie model');
         assert.strictEqual(result2.isController, false,
                            'unexpected controller model');
-        assert.strictEqual(result2.lastConnection, 'yesterday');
+        assert.strictEqual(result2.lastConnection, null);
         const result3 = models[2];
         assert.strictEqual(result3.err, undefined);
         assert.strictEqual(result3.id, '5bea955d-3');
@@ -951,12 +1157,17 @@ describe('Controller API', function() {
         assert.strictEqual(result3.provider, 'aws');
         assert.strictEqual(result3.uuid, '5bea955d-3');
         assert.strictEqual(result3.controllerUUID, '5bea955d-c');
+        assert.strictEqual(result3.credential, 'admin-aws');
+        assert.strictEqual(result3.region, 'east');
+        assert.strictEqual(result3.cloud, 'aws');
+        assert.strictEqual(result3.numMachines, 0);
+        assert.deepEqual(result3.users, []);
         assert.strictEqual(result3.life, 'alive');
         assert.strictEqual(result3.owner, 'cyberman@local');
         assert.strictEqual(result3.isAlive, true, 'unexpected zombie model');
         assert.strictEqual(result3.isController, false,
                            'unexpected controller model');
-        assert.strictEqual(result3.lastConnection, 'tomorrow');
+        assert.strictEqual(result3.lastConnection, null);
         assert.equal(conn.messages.length, 2);
         assert.deepEqual(conn.messages[0], {
           type: 'ModelManager',
@@ -989,21 +1200,18 @@ describe('Controller API', function() {
               'owner-tag': 'user-dalek',
               uuid: '5bea955d-1'
             },
-            'last-connection': 'today'
           }, {
             model: {
               name: 'admin',
               'owner-tag': 'user-who',
               uuid: '5bea955d-c'
             },
-            'last-connection': 'yesterday'
           }, {
             model: {
               name: 'mymodel',
               'owner-tag': 'user-cyberman',
               uuid: '5bea955d-3'
             },
-            'last-connection': 'tomorrow'
           }]
         }
       });
@@ -1018,6 +1226,10 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-1',
               'controller-uuid': '5bea955d-c',
+              'cloud-region': 'localhost',
+              'cloud-credential-tag': 'cloudcred-admin',
+              'cloud-tag': 'cloud-lxd',
+              machines: [{}, {}, {}, {}],
               life: 'dead',
               'owner-tag': 'user-dalek@local'
             }
@@ -1028,6 +1240,8 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-c',
               'controller-uuid': '5bea955d-c',
+              'cloud-tag': 'cloud-lxd',
+              machines: [],
               life: 'alive',
               'owner-tag': 'user-who@local'
             }
@@ -1038,6 +1252,9 @@ describe('Controller API', function() {
               'provider-type': 'aws',
               uuid: '5bea955d-3',
               'controller-uuid': '5bea955d-c',
+              'cloud-region': 'east',
+              'cloud-credential-tag': 'cloudcred-admin-aws',
+              'cloud-tag': 'cloud-aws',
               life: 'alive',
               'owner-tag': 'user-cyberman@local'
             }
@@ -1937,6 +2154,183 @@ describe('Controller API', function() {
     it('fails for no results revoking credentials', function(done) {
       // Perform the request.
       controllerAPI.revokeCloudCredential('invalid', err => {
+        assert.strictEqual(err, 'invalid results from Juju: []');
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: []}
+      });
+    });
+  });
+
+  describe('grantModelAccess', function() {
+    it('grants users access', function(done) {
+      // Perform the request.
+      const users = ['dalek', 'drwho@external'];
+      const access = 'read';
+      controllerAPI.grantModelAccess('uuid-1234', users, access, err => {
+        assert.strictEqual(err, null);
+        const msg = conn.last_message();
+        assert.deepEqual(msg, {
+          'request-id': 1,
+          type: 'ModelManager',
+          request: 'ModifyModelAccess',
+          version: 2,
+          params: {
+            changes: [
+              {
+                'access': 'read',
+                'action': 'grant',
+                'model-tag': 'model-uuid-1234',
+                'user-tag': 'user-dalek'
+              },
+              {
+                'access': 'read',
+                'action': 'grant',
+                'model-tag': 'model-uuid-1234',
+                'user-tag': 'user-drwho@external'
+              }
+            ]
+          }
+        });
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: [{}]}
+      });
+    });
+
+    it('handles request failures while granting user access', function(done) {
+      // Perform the request.
+      controllerAPI.grantModelAccess('uuid-1234', ['dalek'], 'read', err => {
+        assert.strictEqual(err, 'bad wolf');
+        done();
+      });
+      // Mimic response.
+      conn.msg({'request-id': 1, error: 'bad wolf'});
+    });
+
+    it('handles API failures while granting user access', function(done) {
+      // Perform the request.
+      controllerAPI.grantModelAccess('uuid-1234', ['dalek'], 'read', err => {
+        assert.strictEqual(err, 'bad wolf');
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: [{error: {message: 'bad wolf'}}]}
+      });
+    });
+
+    it('fails for unexpected results granting user access', function(done) {
+      // Perform the request.
+      controllerAPI.grantModelAccess('uuid-1234', ['dalek'], 'read', err => {
+        assert.strictEqual(err, 'invalid results from Juju: [{},{}]');
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: [{}, {}]}
+      });
+    });
+
+    it('fails for no results granting user access', function(done) {
+      // Perform the request.
+      controllerAPI.grantModelAccess('uuid-1234', ['invalid'], 'read', err => {
+        assert.strictEqual(err, 'invalid results from Juju: []');
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: []}
+      });
+    });
+  });
+
+  describe('revokeModelAccess', function() {
+    it('revokes users access', function(done) {
+      // Perform the request.
+      const users = ['dalek', 'drwho@external'];
+      controllerAPI.revokeModelAccess('uuid-1234', users, 'read', err => {
+        assert.strictEqual(err, null);
+        const msg = conn.last_message();
+        assert.deepEqual(msg, {
+          'request-id': 1,
+          type: 'ModelManager',
+          request: 'ModifyModelAccess',
+          version: 2,
+          params: {
+            changes: [
+              {
+                'access': 'read',
+                'action': 'revoke',
+                'model-tag': 'model-uuid-1234',
+                'user-tag': 'user-dalek'
+              },
+              {
+                'access': 'read',
+                'action': 'revoke',
+                'model-tag': 'model-uuid-1234',
+                'user-tag': 'user-drwho@external'
+              }
+            ]
+          }
+        });
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: [{}]}
+      });
+    });
+
+    it('handles request failures while revoking user access', function(done) {
+      // Perform the request.
+      controllerAPI.revokeModelAccess('uuid-1234', ['dalek'], 'read', err => {
+        assert.strictEqual(err, 'bad wolf');
+        done();
+      });
+      // Mimic response.
+      conn.msg({'request-id': 1, error: 'bad wolf'});
+    });
+
+    it('handles API failures while revoking user access', function(done) {
+      // Perform the request.
+      controllerAPI.revokeModelAccess('uuid-1234', ['dalek'], 'read', err => {
+        assert.strictEqual(err, 'bad wolf');
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: [{error: {message: 'bad wolf'}}]}
+      });
+    });
+
+    it('fails for unexpected results revoking user access', function(done) {
+      controllerAPI.revokeModelAccess('uuid-1234', ['dalek'], 'read', err => {
+      // Perform the request.
+        assert.strictEqual(err, 'invalid results from Juju: [{},{}]');
+        done();
+      });
+      // Mimic response.
+      conn.msg({
+        'request-id': 1,
+        response: {results: [{}, {}]}
+      });
+    });
+
+    it('fails for no results revoking user access', function(done) {
+      // Perform the request.
+      controllerAPI.revokeModelAccess('uuid-1234', ['invalid'], 'read', err => {
         assert.strictEqual(err, 'invalid results from Juju: []');
         done();
       });

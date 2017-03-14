@@ -25,7 +25,7 @@ chai.config.includeStack = true;
 chai.config.truncateThreshold = 0;
 
 describe('EntityHeader', function() {
-  var acl, mockEntity;
+  let acl, mockEntity;
 
   beforeAll(function(done) {
     // By loading these files it makes their classes available in the tests.
@@ -41,7 +41,7 @@ describe('EntityHeader', function() {
     mockEntity = undefined;
   });
 
-  it('renders an entity properly', function() {
+  it('renders the latest entity properly', function() {
     var renderer = jsTestUtils.shallowRender(
         <juju.components.EntityHeader
           acl={acl}
@@ -49,6 +49,7 @@ describe('EntityHeader', function() {
           deployService={sinon.spy()}
           changeState={sinon.spy()}
           entityModel={mockEntity}
+          getModelName={sinon.stub()}
           getBundleYAML={sinon.stub()}
           hasPlans={false}
           importBundleYAML={sinon.stub()}
@@ -69,13 +70,20 @@ describe('EntityHeader', function() {
                 className="entity-header__title"
                 itemProp="name"
                 ref="entityHeaderTitle">
-                django
+                django{' '}
+                <span className="entity-header__version">
+                  {'#'}{123}
+                </span>
               </h1>
               <ul className="bullets inline entity-header__properties">
                 <li className="entity-header__by">
                   By{' '}
                   <a href="https://launchpad.net/~test-owner"
+                    className="link"
                     target="_blank">test-owner</a>
+                </li>
+                <li>
+                  {'Latest version (#'}{123}{')'}
                 </li>
                 {[<li key="trusty" className="entity-header__series">
                   trusty
@@ -116,12 +124,36 @@ describe('EntityHeader', function() {
                 action={instance._handleDeployClick}
                 disabled={false}
                 type="positive"
-                title="Add to canvas" />
+                title="Add to model" />
             </div>
           </div>
         </header>
       </div>);
     assert.deepEqual(output, expected);
+  });
+
+  it('renders an old entity properly', function() {
+    mockEntity.set('revision_id', 122);
+    const renderer = jsTestUtils.shallowRender(
+        <juju.components.EntityHeader
+          acl={acl}
+          addNotification={sinon.stub()}
+          deployService={sinon.spy()}
+          changeState={sinon.spy()}
+          entityModel={mockEntity}
+          getBundleYAML={sinon.stub()}
+          getModelName={sinon.stub()}
+          hasPlans={false}
+          importBundleYAML={sinon.stub()}
+          pluralize={sinon.stub()}
+          scrollPosition={0} />, true);
+    const output = renderer.getRenderOutput();
+
+    assert.deepEqual(
+      output.props.children.props.children.props.children[0].
+      props.children[1].props.children[2].props.children[1],
+      122
+    );
   });
 
   it('can display plans', function() {
@@ -135,6 +167,7 @@ describe('EntityHeader', function() {
           deployService={sinon.spy()}
           changeState={sinon.spy()}
           entityModel={mockEntity}
+          getModelName={sinon.stub()}
           getBundleYAML={sinon.stub()}
           hasPlans={true}
           plans={plans}
@@ -165,6 +198,7 @@ describe('EntityHeader', function() {
           changeState={sinon.spy()}
           entityModel={mockEntity}
           getBundleYAML={sinon.stub()}
+          getModelName={sinon.stub()}
           hasPlans={true}
           plans={null}
           importBundleYAML={sinon.stub()}
@@ -191,6 +225,7 @@ describe('EntityHeader', function() {
           changeState={sinon.spy()}
           entityModel={mockEntity}
           getBundleYAML={sinon.stub()}
+          getModelName={sinon.stub()}
           hasPlans={true}
           plans={[]}
           importBundleYAML={sinon.stub()}
@@ -217,6 +252,7 @@ describe('EntityHeader', function() {
           changeState={sinon.spy()}
           entityModel={entity}
           getBundleYAML={sinon.stub()}
+          getModelName={sinon.stub()}
           hasPlans={false}
           importBundleYAML={sinon.stub()}
           pluralize={pluralize}
@@ -232,10 +268,10 @@ describe('EntityHeader', function() {
       </li>);
     assert.deepEqual(
       output.props.children.props.children.props.children[0]
-        .props.children[2].props.children[2], expected);
+        .props.children[2].props.children[3], expected);
   });
 
-  it('displays an add to canvas button', function() {
+  it('displays an add to model button', function() {
     var output = testUtils.renderIntoDocument(
       <juju.components.EntityHeader
         acl={acl}
@@ -244,13 +280,33 @@ describe('EntityHeader', function() {
         changeState={sinon.spy()}
         deployService={sinon.spy()}
         getBundleYAML={sinon.stub()}
+        getModelName={sinon.stub()}
         hasPlans={false}
         importBundleYAML={sinon.stub()}
         pluralize={sinon.stub()}
         scrollPosition={0} />);
     var deployAction = output.refs.deployAction;
     assert.equal(deployAction.props.type, 'positive');
-    assert.equal(deployAction.props.title, 'Add to canvas');
+    assert.equal(deployAction.props.title, 'Add to model');
+  });
+
+  it('displays the model name in the add to model button if provided', () => {
+    const output = testUtils.renderIntoDocument(
+      <juju.components.EntityHeader
+        acl={acl}
+        addNotification={sinon.stub()}
+        entityModel={mockEntity}
+        changeState={sinon.spy()}
+        deployService={sinon.spy()}
+        getBundleYAML={sinon.stub()}
+        getModelName={sinon.stub().returns('porkchop')}
+        hasPlans={false}
+        importBundleYAML={sinon.stub()}
+        pluralize={sinon.stub()}
+        scrollPosition={0} />);
+    const deployAction = output.refs.deployAction;
+    assert.equal(deployAction.props.type, 'positive');
+    assert.equal(deployAction.props.title, 'Add to porkchop');
   });
 
   it('displays an unsupported message for multi-series charms', function() {
@@ -263,6 +319,7 @@ describe('EntityHeader', function() {
         changeState={sinon.spy()}
         deployService={sinon.spy()}
         getBundleYAML={sinon.stub()}
+        getModelName={sinon.stub()}
         hasPlans={false}
         importBundleYAML={sinon.stub()}
         pluralize={sinon.stub()}
@@ -283,6 +340,7 @@ describe('EntityHeader', function() {
         addNotification={sinon.stub()}
         importBundleYAML={importBundleYAML}
         getBundleYAML={getBundleYAML}
+        getModelName={sinon.stub()}
         hasPlans={false}
         deployService={deployService}
         changeState={changeState}
@@ -308,6 +366,7 @@ describe('EntityHeader', function() {
         addNotification={sinon.stub()}
         importBundleYAML={importBundleYAML}
         getBundleYAML={getBundleYAML}
+        getModelName={sinon.stub()}
         hasPlans={true}
         deployService={deployService}
         changeState={changeState}
@@ -338,6 +397,7 @@ describe('EntityHeader', function() {
         addNotification={sinon.stub()}
         importBundleYAML={importBundleYAML}
         getBundleYAML={getBundleYAML}
+        getModelName={sinon.stub()}
         hasPlans={true}
         deployService={deployService}
         changeState={changeState}
@@ -366,6 +426,7 @@ describe('EntityHeader', function() {
         addNotification={sinon.stub()}
         importBundleYAML={importBundleYAML}
         getBundleYAML={getBundleYAML}
+        getModelName={sinon.stub()}
         hasPlans={false}
         deployService={deployService}
         changeState={changeState}
@@ -393,6 +454,7 @@ describe('EntityHeader', function() {
         acl={acl}
         importBundleYAML={importBundleYAML}
         getBundleYAML={getBundleYAML}
+        getModelName={sinon.stub()}
         hasPlans={false}
         deployService={deployService}
         changeState={changeState}
@@ -420,6 +482,7 @@ describe('EntityHeader', function() {
         acl={acl}
         importBundleYAML={importBundleYAML}
         getBundleYAML={getBundleYAML}
+        getModelName={sinon.stub()}
         hasPlans={false}
         deployService={deployService}
         changeState={changeState}
@@ -456,6 +519,7 @@ describe('EntityHeader', function() {
           changeState={sinon.spy()}
           entityModel={mockEntity}
           getBundleYAML={sinon.stub()}
+          getModelName={sinon.stub()}
           hasPlans={false}
           importBundleYAML={sinon.stub()}
           pluralize={sinon.stub()}
@@ -468,7 +532,7 @@ describe('EntityHeader', function() {
         action={instance._handleDeployClick}
         disabled={true}
         type="positive"
-        title="Add to canvas" />);
+        title="Add to model" />);
     assert.deepEqual(output.props.children.props.children.props.children[1]
       .props.children[2], expected);
   });
