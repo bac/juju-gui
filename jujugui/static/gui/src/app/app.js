@@ -53,15 +53,6 @@ YUI.add('juju-gui', function(Y) {
     Y.Event.EventTracker
   ];
   var JujuGUI = Y.Base.create('juju-gui', Y.App, extensions, {
-    /*
-      Extension properties
-    */
-
-    defaultNamespace: 'charmbrowser',
-    /*
-      End extension properties
-    */
-
     /**
      * Views
      *
@@ -153,6 +144,7 @@ YUI.add('juju-gui', function(Y) {
                       node.getAttribute('name'), node.get('value'));
                 }
               });
+              Y.one('#shortcut-settings').hide();
             });
 
             target.one('.close').on('click', function(ev) {
@@ -466,23 +458,36 @@ YUI.add('juju-gui', function(Y) {
       });
 
       let environments = juju.environments;
-      // If there is no protocol in the baseURL then prefix the origin when
-      // creating state.
-      let baseURL = cfg.baseUrl;
-      if (baseURL.indexOf('://') < 0) {
-        baseURL = `${window.location.origin}${baseURL}`;
-      }
-      this.state = this._setupState(baseURL);
+
+      // This is wrapped to be called twice.
+      // The early return (at line 478) would state from being set (originally
+      // at line 514).
+      const setUpStateWrapper = function() {
+        // If there is no protocol in the baseURL then prefix the origin when
+        // creating state.
+        let baseURL = cfg.baseUrl;
+        if (baseURL.indexOf('://') < 0) {
+          baseURL = `${window.location.origin}${baseURL}`;
+        }
+        this.state = this._setupState(baseURL);
+      }.bind(this);
+
       // Create an environment facade to interact with.
       // Allow "env" as an attribute/option to ease testing.
       var env = this.get('env');
       if (env) {
+        setUpStateWrapper();
         this._init(cfg, env, this.get('controllerAPI'));
         return;
       }
       var ecs = new juju.EnvironmentChangeSet({db: this.db});
       ecs.on('changeSetModified', this._renderDeploymentBar.bind(this));
       ecs.on('currentCommitFinished', this._renderDeploymentBar.bind(this));
+
+      if (this.get('gisf')) {
+        document.body.classList.add('u-is-beta');
+      }
+      this.defaultPageTitle = 'Juju GUI';
 
       let modelOptions = {
         ecs: ecs,
@@ -493,26 +498,18 @@ YUI.add('juju-gui', function(Y) {
         bundleService: this.get('bundleService')
       };
       let controllerOptions = Object.assign({}, modelOptions);
-      if (this.get('sandbox')) {
-        modelOptions = this.createSandboxConnection(
-          Object.assign({}, modelOptions));
-        controllerOptions = this.createSandboxConnection(
-          Object.assign({}, controllerOptions));
-      } else {
-        // The GUI is connected to a real Juju environment. Instantiate a Web
-        // handler allowing to perform asynchronous HTTPS requests to Juju.
-        modelOptions.webHandler = new environments.web.WebHandler();
-      }
-      let modelAPI, controllerAPI;
-      if (this.isLegacyJuju()) {
-        modelAPI = new environments.GoLegacyEnvironment(modelOptions);
-      } else {
-        modelAPI = new environments.GoEnvironment(modelOptions);
-        controllerAPI = new Y.juju.ControllerAPI(controllerOptions);
-      }
-      if (this.get('gisf')) {
-        document.body.classList.add('u-is-beta');
-      }
+      modelOptions.webHandler = new environments.web.WebHandler();
+      const modelAPI = new environments.GoEnvironment(modelOptions);
+      const controllerAPI = new Y.juju.ControllerAPI(controllerOptions);
+
+      // For analytics to work we need to set it up before state is set up.
+      // Relies on controllerAPI, is used by state
+      this.sendAnalytics = juju.sendAnalyticsFactory(
+        controllerAPI,
+        window.dataLayer
+      );
+
+      setUpStateWrapper();
 
       this.defaultPageTitle = 'Juju GUI';
       this._init(cfg, modelAPI, controllerAPI);
@@ -559,40 +556,24 @@ YUI.add('juju-gui', function(Y) {
         // represents a charm store entity.
         entityPromise = this._fetchEntityFromUserState(pathState.state.user);
       }
-
-      let getBundleChanges;
-      if (controllerAPI) {
-        // In Juju >= 2 we establish the controller API connection first, then
-        // the model one. Also, bundle changes are always retrieved using the
-        // controller connection.
-        this.controllerAPI = this.setUpControllerAPI(
-          controllerAPI, user, password, macaroons, entityPromise);
-        getBundleChanges = this.controllerAPI.getBundleChanges.bind(
-          this.controllerAPI);
-        // Create Romulus API client instances.
-        this._setupRomulusServices(
-          window.juju_config, window.jujulib, window.localStorage);
-      } else {
-        // In legacy Juju, we only connect to the model, and therefore bundle
-        // changes are retrieved from that single WebSocket connection.
-        modelAPI.set('socket_url',
-          this.createSocketURL(this.get('socketTemplate'), modelUUID));
-        getBundleChanges = this.env.getBundleChanges.bind(this.env);
-      }
+      this.controllerAPI = this.setUpControllerAPI(
+        controllerAPI, user, password, macaroons, entityPromise);
+      const getBundleChanges = this.controllerAPI.getBundleChanges.bind(
+        this.controllerAPI);
+      // Create Romulus API client instances.
+      this._setupRomulusServices(
+        window.juju_config, window.jujulib, window.localStorage);
       // Set the modelAPI in the model controller here so
       // that we know that it's been setup.
       this.modelController.set('env', this.env);
 
       // Create a Bundle Importer instance.
-      var environments = Y.namespace('juju.environments');
       this.bundleImporter = new Y.juju.BundleImporter({
         db: this.db,
         modelAPI: this.env,
         getBundleChanges: getBundleChanges,
-        fakebackend: new environments.FakeBackend({
-          charmstore: this.get('charmstore')
-        }),
-        isLegacyJuju: this.isLegacyJuju(),
+        makeEntityModel: Y.juju.makeEntityModel,
+        charmstore: this.get('charmstore'),
         hideDragOverNotification: this._hideDragOverNotification.bind(this)
       });
 
@@ -608,9 +589,6 @@ YUI.add('juju-gui', function(Y) {
       this.on('*:navigateTo', function(e) {
         this.navigate(e.url);
       }, this);
-
-      // Notify user attempts to modify the environment without permission.
-      this.env.on('permissionDenied', this.onEnvPermissionDenied, this);
 
       // When the environment name becomes available, display it.
       this.env.after('environmentNameChange',
@@ -650,7 +628,7 @@ YUI.add('juju-gui', function(Y) {
       // When the connection resets, reset the db, re-login (a delta will
       // arrive with successful authentication), and redispatch.
       this.env.after('connectedChange', evt => {
-        this._clearProviderLogo();
+        this._renderProviderLogo();
         if (!evt.newVal) {
           // The model is not connected, do nothing waiting for a reconnection.
           console.log('model disconnected');
@@ -663,38 +641,6 @@ YUI.add('juju-gui', function(Y) {
         if (credentials.areAvailable) {
           this.loginToAPIs(null, !!credentials.macaroons, [this.env]);
           return;
-        }
-        // The user can also try to log in with an authentication token.
-        // This will look like ?authtoken=AUTHTOKEN.  For instance,
-        // in the sandbox, try logging in with ?authtoken=demoToken.
-        // To get a real token from the Juju GUI charm's environment
-        // proxy, within an authenticated websocket session, use a
-        // request like this:
-        // {
-        //   'RequestId': 42,
-        //   'Type': 'GUIToken',
-        //   'Request': 'Create',
-        //   'Params': {},
-        // }
-        // You can then use the token once until it expires, within two
-        // minutes of this writing.
-        var querystring = this.location.search.substring(1);
-        var qs = views.utils.parseQueryString(querystring);
-        var authtoken = qs.authtoken || '';
-        if (authtoken || authtoken.length) {
-          // De-dupe if necessary.
-          if (Array.isArray(authtoken)) {
-            authtoken = authtoken[0];
-          }
-          // Try a token login.
-          this.env.tokenLogin(authtoken);
-        }
-        // There are no credentials. Do nothing in this case if we are on Juju
-        // >= 2 as the controller login check will have kicked the user to the
-        // login prompt already and we can wait until they have provided the
-        // credentials there. In Juju 1 though we need to display the login.
-        if (!this.controllerAPI) {
-          this._displayLogin();
         }
       });
 
@@ -737,53 +683,10 @@ YUI.add('juju-gui', function(Y) {
         document.addEventListener(
           eventName, this._boundAppDragOverHandler);
       });
-
-      // We are now ready to connect the environment and bootstrap the app.
-      if (this.controllerAPI) {
-        // In Juju >= 2 we connect to the controller and then to the model.
-        this.controllerAPI.connect();
-      } else {
-        // We won't have a controller API connection in Juju 1.
-        this.env.connect();
-      }
+      // In Juju >= 2 we connect to the controller and then to the model.
+      this.controllerAPI.connect();
       this.on('*:autoplaceAndCommitAll', this._autoplaceAndCommitAll, this);
       this.state.bootstrap();
-    },
-
-    /**
-      Creates a sandbox connection backend for use with the GoJujuAPI.
-
-      @method createSandboxConnection
-      @param {Object} cfg The configuration object to use and modify with the
-        sandbox connection instance.
-      @return {Object} A modified version of the passed in cfg which
-        contains the sandbox connection.
-    */
-    createSandboxConnection: function(cfg) {
-      cfg.socket_url = this.get('sandboxSocketURL');
-      let environments = juju.environments;
-      let sandboxModule = environments.sandbox;
-      const fakebackend = new environments.FakeBackend({
-        charmstore: this.get('charmstore')
-      });
-      if (cfg.user && cfg.password) {
-        let credentials = fakebackend.get('authorizedUsers');
-        credentials['user-' + cfg.user] = cfg.password;
-        fakebackend.set('authorizedUsers', credentials);
-      }
-      cfg.conn = new sandboxModule.ClientConnection({
-        juju: new sandboxModule.GoJujuAPI({
-          state: fakebackend,
-          socket_url: cfg.socket_url,
-          bundleService: cfg.bundleService
-        })
-      });
-      // Instantiate a fake Web handler, which simulates the
-      // request/response communication between the GUI and the juju-core
-      // HTTPS API.
-      cfg.webHandler =
-        new environments.web.WebSandbox({state: fakebackend});
-      return cfg;
     },
 
     /**
@@ -905,18 +808,6 @@ YUI.add('juju-gui', function(Y) {
     },
 
     /**
-      Reports whether the currently connected controller is a legacy Juju
-      (with version < 2).
-
-      @method isLegacyJuju
-      @return {Boolean} Whether a legacy Juju version is being used.
-    */
-    isLegacyJuju: function() {
-      var jujuVersion = this.get('jujuCoreVersion');
-      return views.utils.compareSemver(jujuVersion, '2') === -1;
-    },
-
-    /**
       Handles logging into both the env and controller api WebSockets.
 
       @method loginToAPIs
@@ -1027,17 +918,11 @@ YUI.add('juju-gui', function(Y) {
       // XXX j.c.sackett 2017-01-30 Right now USSO link is using
       // loginToController, while loginToAPIs is used by the login form.
       // We want to use loginToAPIs everywhere since it handles more.
-      let legacy = this.isLegacyJuju();
-      const loginToController = legacy ?
-        this.env.loginWithMacaroon.bind(
-          this.env, this.bakeryFactory.get('juju')) :
+      const loginToController =
         this.controllerAPI.loginWithMacaroon.bind(
           this.controllerAPI, this.bakeryFactory.get('juju'));
       const webhandler = new Y.juju.environments.web.WebHandler();
       const controllerIsConnected = () => {
-        if (legacy) {
-          return this.env && this.env.get('connected');
-        }
         return this.controllerAPI && this.controllerAPI.get('connected');
       };
       const getDischargeToken = () => {
@@ -1051,13 +936,10 @@ YUI.add('juju-gui', function(Y) {
           errorMessage={err}
           getDischargeToken={getDischargeToken}
           gisf={this.get('gisf')}
-          hideSpinner={this.hideConnectingMask.bind(this)}
-          isLegacyJuju={legacy}
           loginToAPIs={this.loginToAPIs.bind(this)}
           loginToController={loginToController}
           sendPost={webhandler.sendPostRequest.bind(webhandler)}
           setCredentials={this.env.setCredentials.bind(this.env)}
-          showSpinner={this.showConnectingMask.bind(this)}
           storeUser={this.storeUser.bind(this)} />,
         document.getElementById('login-container'));
     },
@@ -1067,10 +949,6 @@ YUI.add('juju-gui', function(Y) {
       environment the GUI is executing in.
     */
     _renderLoginOutLink: function() {
-      if (this.get('sandbox')) {
-        // Do not show the logout link if the user is in sandbox mode.
-        return;
-      }
       const controllerAPI = this.controllerAPI;
       const linkContainerId = 'profile-link-container';
       const linkContainer = document.getElementById(linkContainerId);
@@ -1193,12 +1071,6 @@ YUI.add('juju-gui', function(Y) {
           userInfo={this._getUserInfo(state)}
         />,
         document.getElementById('top-page-container'));
-      // The model name should not be visible when viewing the profile.
-      this._renderBreadcrumb({ showEnvSwitcher: false });
-      // Model actions should not be visible when viewing the profile.
-      this._clearModelActions();
-      // Provider logo should not be visible when viewing the profile.
-      this._clearProviderLogo();
     },
 
     /**
@@ -1268,6 +1140,7 @@ YUI.add('juju-gui', function(Y) {
           acl={this.acl}
           addNotification={this.db.notifications.add.bind(
               this.db.notifications)}
+          generateCloudCredentialName={views.utils.generateCloudCredentialName}
           getUser={this.payment && this.payment.getUser.bind(this.payment)}
           getCloudCredentialNames={
             controllerAPI.getCloudCredentialNames.bind(controllerAPI)}
@@ -1277,8 +1150,11 @@ YUI.add('juju-gui', function(Y) {
           revokeCloudCredential={
             controllerAPI.revokeCloudCredential.bind(controllerAPI)}
           showPay={window.juju_config.payFlag || false}
+          updateCloudCredential={
+            controllerAPI.updateCloudCredential.bind(controllerAPI)}
           user={controllerAPI.getCredentials().user}
-          userInfo={this._getUserInfo(state)} />,
+          userInfo={this._getUserInfo(state)}
+          validateForm={views.utils.validateForm.bind(views.utils)} />,
         document.getElementById('top-page-container'));
       next();
     },
@@ -1395,26 +1271,8 @@ YUI.add('juju-gui', function(Y) {
         });
         return;
       }
-      // The beta sign-up component is displayed in sandbox mode at the
-      // beginning of the deployment flow.
-      const flowDisplayed = state.gui.deploy === 'flow';
-      const cookieExists =
-          document.cookie.indexOf('beta-signup-seen=true') > -1;
-      if (!flowDisplayed && this.get('sandbox') && !cookieExists) {
-        ReactDOM.render(
-          <window.juju.components.DeploymentSignup
-            changeState={this.state.changeState.bind(this.state)}
-            exportEnvironmentFile={
-              utils.exportEnvironmentFile.bind(utils, db,
-                env.findFacadeVersion('Application') === null)}
-            modelName={modelName}
-            staticURL={window.juju_config.staticURL} />,
-          document.getElementById('deployment-container'));
-        return;
-      }
       const changesUtils = this.changesUtils;
       const controllerAPI = this.controllerAPI;
-      const legacy = this.isLegacyJuju();
       const services = db.services;
       // Auto place the units. This is probably not the best UX, but is required
       // to display the machines in the deployment flow.
@@ -1427,14 +1285,12 @@ YUI.add('juju-gui', function(Y) {
         };
       }
       const getUserName = () => {
-        const credentials = !legacy && controllerAPI.getCredentials();
+        const credentials = controllerAPI.getCredentials();
         return credentials ? credentials.user : undefined;
       };
-      const loginToController = !legacy ?
+      const loginToController =
         controllerAPI.loginWithMacaroon.bind(
-          controllerAPI, this.bakeryFactory.get('juju')) :
-        this.env.loginWithMacaroon.bind(
-          this.env, this.bakeryFactory.get('juju'));
+          controllerAPI, this.bakeryFactory.get('juju'));
       const getDischargeToken = function() {
         return window.localStorage.getItem('discharge-token');
       };
@@ -1455,6 +1311,7 @@ YUI.add('juju-gui', function(Y) {
           changes={currentChangeSet}
           charmsGetById={db.charms.getById.bind(db.charms)}
           deploy={utils.deploy.bind(utils, this)}
+          sendAnalytics={this.sendAnalytics}
           setModelName={env.set.bind(env, 'environmentName')}
           generateAllChangeDescriptions={
             changesUtils.generateAllChangeDescriptions.bind(
@@ -1464,32 +1321,31 @@ YUI.add('juju-gui', function(Y) {
               this.terms.getAgreementsByTerms.bind(this.terms)}
           getAuth={this._getAuth.bind(this)}
           getCloudCredentials={
-            !legacy && controllerAPI.getCloudCredentials.bind(
-              controllerAPI)}
+            controllerAPI.getCloudCredentials.bind(controllerAPI)}
           getCloudCredentialNames={
-            !legacy && controllerAPI.getCloudCredentialNames.bind(
-              controllerAPI)}
+            controllerAPI.getCloudCredentialNames.bind(controllerAPI)}
           getCloudProviderDetails={utils.getCloudProviderDetails.bind(utils)}
           getDischargeToken={getDischargeToken}
+          getUser={this.payment && this.payment.getUser.bind(this.payment)}
           getUserName={getUserName}
           gisf={this.get('gisf')}
           groupedChanges={changesUtils.getGroupedChanges(currentChangeSet)}
-          isLegacyJuju={legacy}
           listBudgets={this.plans.listBudgets.bind(this.plans)}
-          listClouds={
-            !legacy && controllerAPI.listClouds.bind(controllerAPI)}
+          listClouds={controllerAPI.listClouds.bind(controllerAPI)}
           listPlansForCharm={this.plans.listPlansForCharm.bind(this.plans)}
           loginToController={loginToController}
           modelCommitted={connected}
           modelName={modelName}
+          profileUsername={this._getUserInfo(state).profile}
           region={env.get('region')}
           sendPost={webhandler.sendPostRequest.bind(webhandler)}
           servicesGetById={services.getById.bind(services)}
+          showPay={window.juju_config.payFlag || false}
           showTerms={this.terms.showTerms.bind(this.terms)}
           storeUser={this.storeUser.bind(this)}
           updateCloudCredential={
-            !legacy && controllerAPI.updateCloudCredential.bind(
-              controllerAPI)}
+            controllerAPI.updateCloudCredential.bind(controllerAPI)}
+          validateForm={utils.validateForm.bind(utils)}
           withPlans={false} />,
         document.getElementById('deployment-container'));
     },
@@ -1530,6 +1386,7 @@ YUI.add('juju-gui', function(Y) {
               changesUtils, services, units)}
           hasEntities={servicesArray.length > 0 || machines.length > 0}
           modelCommitted={this.env.get('connected')}
+          sendAnalytics={this.sendAnalytics}
           showInstall={!!this.get('sandbox')} />,
         document.getElementById('deployment-bar-container'));
     },
@@ -1583,30 +1440,19 @@ YUI.add('juju-gui', function(Y) {
       ReactDOM.render(
         <window.juju.components.ModelActions
           acl={this.acl}
+          appState={this.state}
           changeState={this.state.changeState.bind(this.state)}
-          currentChangeSet={env.get('ecs').getCurrentChangeSet()}
           exportEnvironmentFile={
             utils.exportEnvironmentFile.bind(utils, db,
               env.findFacadeVersion('Application') === null)}
-          hasEntities={db.services.toArray().length > 0 ||
-            db.machines.toArray().length > 0}
           hideDragOverNotification={this._hideDragOverNotification.bind(this)}
           importBundleFile={this.bundleImporter.importBundleFile.bind(
             this.bundleImporter)}
-          userIsAuthenticated={env.userIsAuthenticated}
           renderDragOverNotification={
             this._renderDragOverNotification.bind(this)}
-          sharingVisibility={this._sharingVisibility.bind(this)}/>,
-        document.getElementById('model-actions-container'));
-    },
-
-    /**
-      Unmounts the model action components.
-
-      @method _clearModelActions
-    */
-    _clearModelActions: function() {
-      ReactDOM.unmountComponentAtNode(
+          sharingVisibility={this._sharingVisibility.bind(this)}
+          loadingModel={env.loading}
+          userIsAuthenticated={env.userIsAuthenticated} />,
         document.getElementById('model-actions-container'));
     },
 
@@ -1618,33 +1464,26 @@ YUI.add('juju-gui', function(Y) {
     _renderProviderLogo: function() {
       const container = document.getElementById('provider-logo-container');
       const cloudProvider = this.env.get('providerType');
-      if (!cloudProvider) {
-        this._clearProviderLogo();
-        return;
-      }
-      const providerDetails = views.utils.getCloudProviderDetails(
-        cloudProvider);
-      if (!providerDetails) {
-        this._clearProviderLogo();
-        return;
-      }
+      const providerDetails = cloudProvider ?
+        views.utils.getCloudProviderDetails(cloudProvider) :
+        {};
+      const isProfile = this.state.current.profile;
+      const isDisabled = !cloudProvider || !providerDetails || isProfile;
+      const classes = classNames(
+        'provider-logo',
+        {
+          'provider-logo--disabled': isDisabled
+        }
+      );
       const scale = 0.65;
       ReactDOM.render(
-        <window.juju.components.SvgIcon
-          height={providerDetails.svgHeight * scale}
-          name={providerDetails.id}
-          width={providerDetails.svgWidth * scale} />,
+        <div className={classes}>
+          <window.juju.components.SvgIcon
+            height={providerDetails.svgHeight * scale}
+            name={providerDetails.id || ''}
+            width={providerDetails.svgWidth * scale} />
+        </div>,
         container);
-    },
-
-    /**
-      Unmounts the logo for the current cloud provider.
-
-      @method _clearProviderLogo
-    */
-    _clearProviderLogo: function() {
-      ReactDOM.unmountComponentAtNode(
-        document.getElementById('provider-logo-container'));
     },
 
     /**
@@ -1737,6 +1576,8 @@ YUI.add('juju-gui', function(Y) {
       if (this.hoverService) {
         this.hoverService.detach();
       }
+      const model = this.env;
+      const db = this.db;
       // If the url was provided with a service id which isn't in the localType
       // db then change state back to the added services list. This usually
       // happens if the user tries to visit the inspector of a ghost service
@@ -1744,84 +1585,82 @@ YUI.add('juju-gui', function(Y) {
       if (service) {
         // Select the service token.
         topo.modules.ServiceModule.selectService(service.get('id'));
-        var charm = this.db.charms.getById(service.get('charm'));
-        var relatableApplications = relationUtils.getRelatableApplications(
-          this.db, models.getEndpoints(service, this.endpointsController));
-        const ecs = this.env.get('ecs');
+        const charm = db.charms.getById(service.get('charm'));
+        const relatableApplications = relationUtils.getRelatableApplications(
+          db, models.getEndpoints(service, this.endpointsController));
+        const ecs = model.get('ecs');
         inspector = (
           <window.juju.components.Inspector
             acl={this.acl}
-            service={service}
-            charm={charm}
-            addNotification=
-              {this.db.notifications.add.bind(this.db.notifications)}
-            setConfig={this.env.set_config.bind(this.env)}
-            envResolved={this.env.resolved.bind(this.env)}
-            serviceRelations={
-              relationUtils.getRelationDataForService(this.db, service)}
+            addCharm={model.addCharm.bind(model)}
             addGhostAndEcsUnits={utils.addGhostAndEcsUnits.bind(
-                this, this.db, this.env, service)}
-            createMachinesPlaceUnits={utils.createMachinesPlaceUnits.bind(
-                this, this.db, this.env, service)}
-            destroyService={utils.destroyService.bind(
-                this, this.db, this.env, service)}
-            destroyUnits={utils.destroyUnits.bind(this, this.env)}
-            destroyRelations={this.relationUtils.destroyRelations.bind(
-              this, this.db, this.env)}
-            relatableApplications={relatableApplications}
+              this, db, model, service)}
+            addNotification={db.notifications.add.bind(db.notifications)}
+            appState={this.state}
+            charm={charm}
             clearState={utils.clearState.bind(this, topo)}
-            createRelation={
-              relationUtils.createRelation.bind(this, this.db, this.env)}
-            getYAMLConfig={utils.getYAMLConfig.bind(this)}
-            exposeService={this.env.expose.bind(this.env)}
-            unexposeService={this.env.unexpose.bind(this.env)}
-            unplaceServiceUnits={ecs.unplaceServiceUnits.bind(ecs)}
-            getAvailableVersions={charmstore.getAvailableVersions.bind(
-                charmstore)}
-            getAvailableEndpoints={relationUtils.getAvailableEndpoints.bind(
-              this, this.endpointsController, this.db, models.getEndpoints)}
-            getMacaroon={charmstore.bakery.getMacaroon.bind(charmstore.bakery)}
-            addCharm={this.env.addCharm.bind(this.env)}
+            createMachinesPlaceUnits={utils.createMachinesPlaceUnits.bind(
+              this, db, model, service)}
+            createRelation={relationUtils.createRelation.bind(this, db, model)}
+            destroyService={utils.destroyService.bind(
+              this, db, model, service)}
+            destroyRelations={this.relationUtils.destroyRelations.bind(
+              this, db, model)}
+            destroyUnits={utils.destroyUnits.bind(this, model)}
             displayPlans={utils.compareSemver(
               this.get('jujuCoreVersion'), '2') > -1}
-            modelUUID={this.get('modelUUID') || ''}
-            showActivePlan={this.plans.showActivePlan.bind(this.plans)}
-            setCharm={this.env.setCharm.bind(this.env)}
-            getCharm={this.env.get_charm.bind(this.env)}
+            getCharm={model.get_charm.bind(model)}
             getUnitStatusCounts={utils.getUnitStatusCounts}
-            updateServiceUnitsDisplayname=
-              {this.db.updateServiceUnitsDisplayname.bind(this.db)}
-            getServiceById={this.db.services.getById.bind(this.db.services)}
-            getServiceByName=
-              {this.db.services.getServiceByName.bind(this.db.services)}
+            getYAMLConfig={utils.getYAMLConfig.bind(this)}
+            envResolved={model.resolved.bind(model)}
+            exposeService={model.expose.bind(model)}
+            getAvailableEndpoints={relationUtils.getAvailableEndpoints.bind(
+              this, this.endpointsController, db, models.getEndpoints)}
+            getAvailableVersions={charmstore.getAvailableVersions.bind(
+              charmstore)}
+            getMacaroon={charmstore.bakery.getMacaroon.bind(charmstore.bakery)}
+            getServiceById={db.services.getById.bind(db.services)}
+            getServiceByName={db.services.getServiceByName.bind(db.services)}
             linkify={utils.linkify}
-            appState={this.state} />
+            modelUUID={this.get('modelUUID') || ''}
+            providerType={model.get('providerType') || ''}
+            relatableApplications={relatableApplications}
+            service={service}
+            serviceRelations={
+              relationUtils.getRelationDataForService(db, service)}
+            setCharm={model.setCharm.bind(model)}
+            setConfig={model.set_config.bind(model)}
+            showActivePlan={this.plans.showActivePlan.bind(this.plans)}
+            unexposeService={model.unexpose.bind(model)}
+            unplaceServiceUnits={ecs.unplaceServiceUnits.bind(ecs)}
+            updateServiceUnitsDisplayname={
+              db.updateServiceUnitsDisplayname.bind(db)}
+          />
         );
       } else if (localType && window.localCharmFile) {
         // When dragging a local charm zip over the canvas it animates the
         // drag over notification which needs to be closed when the inspector
         // is opened.
         this._hideDragOverNotification();
-        var localCharmHelpers = juju.localCharmHelpers;
+        const localCharmHelpers = juju.localCharmHelpers;
         inspector = (
           <window.juju.components.LocalInspector
             acl={this.acl}
+            changeState={this.state.changeState.bind(this.state)}
             file={window.localCharmFile}
             localType={localType}
-            services={this.db.services}
+            services={db.services}
             series={utils.getSeriesList()}
-            uploadLocalCharm={
-                localCharmHelpers.uploadLocalCharm.bind(
-                this, this.env, this.db)}
             upgradeServiceUsingLocalCharm={
-                localCharmHelpers.upgradeServiceUsingLocalCharm.bind(
-                this, this.env, this.db)}
-            changeState={this.state.changeState.bind(this.state)} />
+              localCharmHelpers.upgradeServiceUsingLocalCharm.bind(
+              this, model, db)}
+            uploadLocalCharm={
+              localCharmHelpers.uploadLocalCharm.bind(
+              this, model, db)}
+          />
         );
       } else {
-        this.state.changeState({
-          gui: {
-            inspector: null}});
+        this.state.changeState({gui: {inspector: null}});
         return;
       }
       ReactDOM.render(
@@ -1869,7 +1708,6 @@ YUI.add('juju-gui', function(Y) {
           acl={this.acl}
           apiUrl={charmstore.url}
           charmstoreSearch={charmstore.search.bind(charmstore)}
-          displayPlans={!this.isLegacyJuju()}
           series={utils.getSeriesList()}
           importBundleYAML={this.bundleImporter.importBundleYAML.bind(
               this.bundleImporter)}
@@ -1878,7 +1716,6 @@ YUI.add('juju-gui', function(Y) {
           getFile={charmstore.getFile.bind(charmstore)}
           getDiagramURL={charmstore.getDiagramURL.bind(charmstore)}
           getModelName={getModelName}
-          isLegacyJuju={this.isLegacyJuju()}
           listPlansForCharm={this.plans.listPlansForCharm.bind(this.plans)}
           renderMarkdown={marked.bind(this)}
           deployService={this.deployService.bind(this)}
@@ -1926,7 +1763,7 @@ YUI.add('juju-gui', function(Y) {
       @param {Function} next - Call to continue dispatching.
     */
     _renderMachineView: function(state, next) {
-      var db = this.db;
+      const db = this.db;
       ReactDOM.render(
         <window.juju.components.MachineView
           acl={this.acl}
@@ -1935,12 +1772,13 @@ YUI.add('juju-gui', function(Y) {
           autoPlaceUnits={this._autoPlaceUnits.bind(this)}
           createMachine={this._createMachine.bind(this)}
           destroyMachines={this.env.destroyMachines.bind(this.env)}
-          environmentName={db.environment.get('name')}
-          jujuCoreVersion={this.get('jujuCoreVersion')}
+          environmentName={db.environment.get('name') || ''}
           machines={db.machines}
           placeUnit={this.env.placeUnit.bind(this.env)}
+          providerType={this.env.get('providerType') || ''}
           removeUnits={this.env.remove_units.bind(this.env)}
           services={db.services}
+          series={window.jujulib.CHARM_SERIES}
           units={db.units} />,
         document.getElementById('machine-view'));
       next();
@@ -2167,7 +2005,8 @@ YUI.add('juju-gui', function(Y) {
     _setupState: function(baseURL) {
       const state = new window.jujugui.State({
         baseURL: baseURL,
-        seriesList: window.jujulib.SERIES
+        seriesList: window.jujulib.SERIES,
+        sendAnalytics: this.sendAnalytics
       });
 
       state.register([
@@ -2451,6 +2290,7 @@ YUI.add('juju-gui', function(Y) {
         });
         this.payment = new window.jujulib.payment(
           config.paymentURL, paymentBakery);
+        this.stripe = new window.jujulib.stripe('https://js.stripe.com/');
       }
     },
 
@@ -2675,23 +2515,11 @@ YUI.add('juju-gui', function(Y) {
       }
       this.set('modelUUID', '');
       this.set('loggedIn', false);
-      // Close both controller and model API connections.
-      let closeController = callback => {
-        callback();
-      };
       const controllerAPI = this.controllerAPI;
-      if (controllerAPI) {
-        closeController = controllerAPI.close.bind(controllerAPI);
-      }
+      const closeController = controllerAPI.close.bind(controllerAPI);
       this.env.close(() => {
         closeController(() => {
-          if (controllerAPI) {
-            // Juju 2 connects to the controller and gets models from there.
-            controllerAPI.connect();
-          } else {
-            // Juju 1 is just connected to a model.
-            this.env.connect();
-          }
+          controllerAPI.connect();
           this.maskVisibility(true);
           this.env.get('ecs').clear();
           this.db.reset();
@@ -2750,26 +2578,6 @@ YUI.add('juju-gui', function(Y) {
     },
 
     /**
-     * Notify with an error when the user tries to change the environment
-     * without permission.
-     *
-     * @method onEnvPermissionDenied
-     * @private
-     * @param {Object} evt An event object (with "title" and "message"
-         attributes).
-     * @return {undefined} Mutates only.
-     */
-    onEnvPermissionDenied: function(evt) {
-      this.db.notifications.add(
-          new models.Notification({
-            title: evt.title,
-            message: evt.message,
-            level: 'error'
-          })
-      );
-    },
-
-    /**
       Get the path to which we should redirect after logging in.  Clear it out
       afterwards so it is clear that we've consumed it.
 
@@ -2818,39 +2626,6 @@ YUI.add('juju-gui', function(Y) {
       if (this.state.current.root === 'login') {
         this.state.changeState({root: null});
       }
-      // Handle token authentication.
-      if (evt.fromToken) {
-        // Alert the user.  In the future, we might want to call out the
-        // password so the user can note it.  That will probably want a
-        // modal or similar.
-        this.env.onceAfter('environmentNameChange', function() {
-          this.db.notifications.add(
-              new models.Notification({
-                title: 'Logged in with Token',
-                message: ('You have successfully logged in with a ' +
-                          'single-use authentication token.'),
-                level: 'important'
-              })
-          );
-        }, this);
-      }
-      // Handle the change set token if provided in the query.
-      // The change set token identifies a collections of changes required
-      // to deploy a bundle. Those changes are assumed to be already
-      // registered in the GUI server (via a ChangeSet:SetChanges request).
-      // Doing that is usually responsibility of a separate system
-      // (most of the times, it is Juju Quickstart).
-      var querystring = this.location.search.substring(1);
-      var qs = views.utils.parseQueryString(querystring);
-      var changesToken = qs.changestoken || '';
-      if (changesToken || changesToken.length) {
-        // De-dupe if necessary.
-        if (Array.isArray(changesToken)) {
-          changesToken = changesToken[0];
-        }
-        // Try to create a bundle uncommitted state using the token.
-        this.bundleImporter.importChangesToken(changesToken);
-      }
       // If we are in GISF mode then we do not want to store and redirect
       // on login because the user has already logged into their models
       // and will frequently be switching between models and logging in to
@@ -2877,25 +2652,26 @@ YUI.add('juju-gui', function(Y) {
     */
     createSocketURL: function(template, uuid, server, port) {
       let baseUrl = '';
-      const sandbox = this.get('sandbox');
-      if (template[0] === '/' || sandbox) {
-        // We either are in sandbox mode or only the WebSocket path is passed.
-        // In both cases, we need to calculate the base URL.
+      const apiAddress = this.get('apiAddress');
+      if (!apiAddress) {
+        // It should not ever be possible to get here unless you're running the
+        // gui in dev mode without pointing it to a proxy/server supplying
+        // the necessary config values.
+        alert(
+          'Unable to create socketURL, no apiAddress provided. The GUI must ' +
+          'be loaded with a valid configuration. Try GUIProxy if ' +
+          'running in development mode: https://github.com/frankban/guiproxy');
+        return;
+      }
+      if (template[0] === '/') {
+        // The WebSocket path is passed so we need to calculate the base URL.
         const schema = this.get('socket_protocol') || 'wss';
         baseUrl = schema + '://' + window.location.hostname;
         if (window.location.port !== '') {
           baseUrl += ':' + window.location.port;
         }
-        if (sandbox) {
-          // We don't actually use a WebSocket in sandbox mode; create a
-          // placeholder that makes it reasonably clear that this isn't real.
-          if (template === this.get('controllerSocketTemplate')) {
-            return baseUrl + '/sandbox-controller';
-          }
-          return baseUrl + '/sandbox';
-        }
       }
-      const defaults = this.get('apiAddress').replace('wss://', '').split(':');
+      const defaults = apiAddress.replace('wss://', '').split(':');
       template = template.replace('$uuid', uuid);
       template = template.replace('$server', server || defaults[0]);
       template = template.replace('$port', port || defaults[1]);
@@ -2923,10 +2699,8 @@ YUI.add('juju-gui', function(Y) {
       // clearDB=true should really be preserveDB=false by default.
       socketUrl, username, password, callback, reconnect=!!socketUrl,
       clearDB=true) {
-      if (this.get('sandbox')) {
-        console.log('switching models is not supported in sandbox');
-      }
       console.log('switching model connection');
+      this.env.loading = true;
       if (username && password) {
         // We don't always get a new username and password when switching
         // environments; only set new credentials if we've actually gotten them.
@@ -2937,14 +2711,15 @@ YUI.add('juju-gui', function(Y) {
         });
       };
       const credentials = this.env.getCredentials();
-      if (callback) {
-        const onLogin = function(callback) {
+      const onLogin = function(callback) {
+        this.env.loading = false;
+        if (callback) {
           callback(this.env);
-        };
-        // Delay the callback until after the env login as everything should be
-        // set up by then.
-        this.env.onceAfter('login', onLogin.bind(this, callback), this);
-      }
+        }
+      };
+      // Delay the callback until after the env login as everything should be
+      // set up by then.
+      this.env.onceAfter('login', onLogin.bind(this, callback), this);
       if (clearDB) {
         // Clear uncommitted state.
         this.env.get('ecs').clear();
@@ -2974,7 +2749,6 @@ YUI.add('juju-gui', function(Y) {
       } else {
         this.env.close(onclose);
       }
-      this.hideConnectingMask();
       if (clearDB) {
         this.db.reset();
         this.db.fire('update');
@@ -2985,6 +2759,10 @@ YUI.add('juju-gui', function(Y) {
       // environment object. Is this some kind of race?
       if (instance) {
         instance.topo.modules.ServiceModule.centerOnLoad = true;
+      }
+      // If we're not reconnecting, then mark the switch as done.
+      if (this.state.current.root === 'new') {
+        this.env.loading = false;
       }
     },
 
@@ -3025,31 +2803,6 @@ YUI.add('juju-gui', function(Y) {
       var display = visibility ? 'block' : 'none';
       if (mask) {
         mask.style.display = display;
-      }
-    },
-
-    /**
-      Shows the connecting to Juju environment mask.
-
-      @method showConnectingMask
-    */
-    showConnectingMask: function() {
-      this.maskVisibility(true);
-      var msg = document.getElementById('loading-message');
-      if (msg) {
-        msg.style.display = 'block';
-      }
-    },
-
-    /**
-      Hides the connecting to Juju model mask.
-      @method hideConnectingMask
-    */
-    hideConnectingMask: function() {
-      this.maskVisibility(false);
-      var msg = document.getElementById('loading-message');
-      if (msg) {
-        msg.style.display = 'none';
       }
     },
 
@@ -3138,7 +2891,8 @@ YUI.add('juju-gui', function(Y) {
         charmstore: this.get('charmstore'),
         bundleImporter: this.bundleImporter,
         state: this.state,
-        staticURL: window.juju_config.staticURL
+        staticURL: window.juju_config.staticURL,
+        sendAnalytics: this.sendAnalytics
       };
 
       this.showView('environment', options, {
@@ -3308,7 +3062,6 @@ YUI.add('juju-gui', function(Y) {
   }, {
     ATTRS: {
       html5: true,
-      charmworldURL: {},
       /**
         A flag to indicate if the user is actually logged into the environment.
 
@@ -3383,6 +3136,7 @@ YUI.add('juju-gui', function(Y) {
 }, '0.5.3', {
   requires: [
     'acl',
+    'analytics',
     'changes-utils',
     'juju-charm-models',
     'juju-bundle-models',
@@ -3390,12 +3144,8 @@ YUI.add('juju-gui', function(Y) {
     'juju-endpoints-controller',
     'juju-env-bakery',
     'juju-env-base',
-    'juju-env-fakebackend',
     'juju-env-api',
-    'juju-env-legacy-api',
-    'juju-env-sandbox',
     'juju-env-web-handler',
-    'juju-env-web-sandbox',
     'juju-models',
     'jujulib-utils',
     'net-utils',

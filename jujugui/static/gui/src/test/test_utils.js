@@ -42,12 +42,6 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       var exportFilename =
         views.utils._genereateBundleExportFileName(envName, date);
       assert.equal(exportFilename, 'foo-bar-2014-01-13.yaml');
-
-      var envName = 'sandbox';
-      var date = new Date('October 1, 2014 11:13:00');
-      var exportFilename =
-        views.utils._genereateBundleExportFileName(envName, date);
-      assert.equal(exportFilename, 'sandbox-2014-10-01.yaml');
     });
   });
 }) ();
@@ -928,14 +922,12 @@ describe('utilities', function() {
     it('can switch models', function() {
       const app = {
         set: sinon.stub().withArgs('modelUUID'),
-        showConnectingMask: sinon.stub().withArgs(),
         state: {changeState: sinon.stub()}
       };
       const env = {set: sinon.stub()};
       const model = {id: 'my-uuid', name: 'mymodel', 'owner': 'who'};
       utils._switchModel.call(app, env, model);
       assert.equal(utils._hidePopup.callCount, 1, '_hidePopup');
-      assert.equal(app.showConnectingMask.callCount, 1, 'showConnectingMask');
       assert.equal(app.state.changeState.callCount, 1, 'changeState');
       assert.deepEqual(app.state.changeState.args[0], [{
         profile: null,
@@ -952,7 +944,6 @@ describe('utilities', function() {
     it('changes to disconnected mode if model is missing', function() {
       const app = {
         set: sinon.stub().withArgs('modelUUID'),
-        showConnectingMask: sinon.stub().withArgs(),
         state: {changeState: sinon.stub()}
       };
       const env = {set: sinon.stub()};
@@ -968,7 +959,6 @@ describe('utilities', function() {
     it('does not set root state to new if profile state exists', function() {
       const app = {
         set: sinon.stub().withArgs('modelUUID'),
-        showConnectingMask: sinon.stub().withArgs(),
         state: {current: {profile: 'animal'}, changeState: sinon.stub()}
       };
       const env = {set: sinon.stub()};
@@ -1081,8 +1071,6 @@ describe('utilities', function() {
         createSocketURL: sinon.stub().returns('wss://socket-url'),
         get: sinon.stub().returns('wss://socket-url'),
         switchEnv: sinon.stub(),
-        showConnectingMask: sinon.stub(),
-        hideConnectingMask: sinon.stub(),
         state: {
           changeState: sinon.stub()
         }
@@ -1378,6 +1366,46 @@ describe('utilities', function() {
         utils.parseQueryString('http://example.com?one=1&one=2'), {
           one: ['1', '2'],
         });
+    });
+  });
+
+  describe('validateForm', function() {
+    let utils;
+
+    before(function(done) {
+      YUI(GlobalConfig).use('juju-view-utils', function(Y) {
+        utils = Y.namespace('juju.views.utils');
+        done();
+      });
+    });
+
+    it('can validate a form with an invalid field', function() {
+      const refs = {
+        one: {validate: sinon.stub().returns(false)},
+        two: {validate: sinon.stub().returns(true)}
+      };
+      const fields = ['one', 'two'];
+      assert.isFalse(utils.validateForm(fields, refs));
+    });
+
+    it('can validate a form with valid fields', function() {
+      const refs = {
+        one: {validate: sinon.stub().returns(true)},
+        two: {validate: sinon.stub().returns(true)}
+      };
+      const fields = ['one', 'two'];
+      assert.isTrue(utils.validateForm(fields, refs));
+    });
+
+    it('validates all fields even if one field is invalid', function() {
+      const refs = {
+        one: {validate: sinon.stub().returns(false)},
+        two: {validate: sinon.stub().returns(true)}
+      };
+      const fields = ['one', 'two'];
+      utils.validateForm(fields, refs);
+      assert.equal(refs.one.validate.callCount, 1);
+      assert.equal(refs.two.validate.callCount, 1);
     });
   });
 })();

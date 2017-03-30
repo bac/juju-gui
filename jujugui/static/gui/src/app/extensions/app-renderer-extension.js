@@ -51,7 +51,7 @@ YUI.add('app-renderer-extension', function(Y) {
       // there is no controller to connect to. It will be undefined when the
       // breadcrumb is initially rendered because it hasn't yet been given
       // time to connect and login.
-      if (!controllerAPI || (this.get('sandbox') && !this.get('gisf'))) {
+      if (!controllerAPI) {
         // We do not want to show the model switcher if it isn't supported as
         // it throws an error in the browser console and confuses the user
         // as it's visible but not functional.
@@ -79,7 +79,8 @@ YUI.add('app-renderer-extension', function(Y) {
           showProfile={utils.showProfile.bind(
             this, env && env.get('ecs'),
             this.state.changeState.bind(this.state))}
-          switchModel={utils.switchModel.bind(this, env)} />,
+          switchModel={utils.switchModel.bind(this, env)}
+          loadingModel={this.env.loading} />,
         document.getElementById('header-breadcrumb'));
     },
   };

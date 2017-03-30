@@ -1383,8 +1383,6 @@ YUI.add('juju-view-utils', function(Y) {
     // Remove the switch model confirmation popup if it has been displayed to
     // the user.
     utils._hidePopup();
-    // Show the model connection mask.
-    this.showConnectingMask();
     // Reset the state of the GUI ready for displaying the new model.
     const newState = {profile: null, gui: null, root: null};
     let name = '';
@@ -1500,7 +1498,6 @@ YUI.add('juju-view-utils', function(Y) {
           name: model.name,
           owner: model.owner
         });
-        app.hideConnectingMask();
         callback(null);
       };
       app.set('modelUUID', model.uuid);
@@ -1610,6 +1607,7 @@ YUI.add('juju-view-utils', function(Y) {
     @param {String} providerName Name of the provider.
     @return {Object} The details for the provider.
   */
+
   utils.getCloudProviderDetails = function(providerName) {
     const providers = {
       'gce': {
@@ -1644,23 +1642,16 @@ YUI.add('juju-view-utils', function(Y) {
         },
         message: (
           <p>
-            The GCE provider uses OAauth to Authenticate. This requires that
-            you set it up and get the relevant credentials. For more
-            information see
-            &nbsp;<a className="deployment-panel__link"
-              href={'https://cloud.google.com/compute/docs/api/how-tos/' +
-                'authorization'}
-              target="_blank">
-              authorizing requests to GCE
-            </a>.
-            The key information can be downloaded as a JSON file, or copied
-            from
-            &nbsp;<a className="deployment-panel__link"
-              href={'https://console.developers.google.com/apis/credentials'}
-              target="_blank">
-              the Google API credentials page
-            </a>.
-          </p>)
+            Need help? Read more about <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/credentials"
+            target="_blank" title="Cloud credentials help">credentials in
+            general</a> or <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/help-google"
+            target="_blank"
+            title="Help using the Google Compute Engine public cloud">setting up
+            GCE credentials</a>.
+          </p>
+        )
       },
       'azure': {
         id: 'azure',
@@ -1684,25 +1675,15 @@ YUI.add('juju-view-utils', function(Y) {
         },
         message: (
           <p>
-            The following fields require your Windows Azure management
-            information. Having Juju installed, is really easy to&nbsp;
-            <a className="deployment-panel__link"
-              href='https://jujucharms.com/docs/2.0/help-azure#credentials'
-              target="_blank">
-              set up credentials interactively
-            </a>
-            . All required values are then available and can be displayed
-            running<br/>
-            "juju credentials --show-secrets --format yaml azure".<br/>
-            Is it also possible to&nbsp;
-            <a className="deployment-panel__link"
-              href={'https://jujucharms.com/docs/2.0/help-azure' +
-                    '#manually-adding-credentials'}
-              target="_blank">
-              manually add credentials
-            </a>
-            .
-          </p>)
+            Need help? Read more about <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/credentials"
+            target="_blank" title="Cloud credentials help">credentials in
+            general</a> or <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/help-azure" target="_blank"
+            title="Help using the Microsoft Azure public cloud">setting up
+            Azure credentials</a>.
+          </p>
+        )
       },
       'ec2': {
         id: 'aws',
@@ -1724,14 +1705,15 @@ YUI.add('juju-view-utils', function(Y) {
         },
         message: (
           <p>
-            You can obtain your AWS credentials at&nbsp;
-            <a className="deployment-panel__link"
-              href={'https://console.aws.amazon.com/iam/home?region=' +
-                'eu-west-1#security_credential'}
-              target="_blank">
-              the AWS panel
-            </a>.
-          </p>)
+            Need help? Read more about <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/credentials"
+            target="_blank" title="Cloud credentials help">credentials in
+            general</a> or <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/help-aws" target="_blank"
+            title="Help using the Amazon Web Service public cloud">setting up
+            AWS credentials</a>.
+          </p>
+        )
       },
       'openstack': {
         id: 'openstack',
@@ -1868,10 +1850,40 @@ YUI.add('juju-view-utils', function(Y) {
       }
     };
     // Map the cloud id to provider type.
-    if (providerName === 'aws') {
-      providerName = 'ec2';
+    switch (providerName) {
+      case 'aws':
+        providerName = 'ec2';
+        break;
+      case 'google':
+        providerName = 'gce';
+        break;
     }
     return providers[providerName];
+  };
+
+  /**
+    Validate the form fields in a react component.
+
+    @method validateForm
+    @param {Array} fields A list of field ref names.
+    @param {Object} refs The refs for a component.
+    @returns {Boolean} Whether the form is valid.
+  */
+  utils.validateForm = function(fields, refs) {
+    let formValid = true;
+    fields.forEach(field => {
+      const ref = refs[field];
+      if (!ref || !ref.validate) {
+        return;
+      }
+      const valid = ref.validate();
+      // If there is an error then mark that. We don't want to exit the loop
+      // at this point so that each field gets validated.
+      if (!valid) {
+        formValid = false;
+      }
+    });
+    return formValid;
   };
 
 }, '0.1.0', {

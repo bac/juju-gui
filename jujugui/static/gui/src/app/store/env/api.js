@@ -234,6 +234,13 @@ YUI.add('juju-env-api', function(Y) {
       // reason this can't be set to null as then it displays the name as null
       // instead of picking up that the name has not been set.
       this.setConnectedAttr('environmentName', undefined);
+      // The 'loading' flag signifies if a model is fully loaded or not. Fully
+      // loaded means that the connection is established, authentication is
+      // finished, and the model is ready for API calls. It differs from the
+      // loading/loaded and isUserAuthenticated flags because it is larger in
+      // scope than either of those. Parts of the UI hide/display based on this
+      // flag; for example, we don't show the sharing button while it's false.
+      this.loading = false;
     },
 
     /**
@@ -527,7 +534,7 @@ YUI.add('juju-env-api', function(Y) {
             tags.parse(tags.CONTROLLER, response['controller-tag']));
         }
         this.setConnectedAttr(
-          'modelId',  tags.parse(tags.MODEL, response['model-tag']));
+          'modelId', tags.parse(tags.MODEL, response['model-tag']));
         this.currentModelInfo(this._handleCurrentModelInfo.bind(this));
         this._watchAll();
         // Start pinging the server.
@@ -1655,7 +1662,7 @@ YUI.add('juju-env-api', function(Y) {
       if (args.constraints) {
         params.constraints = this.prepareConstraints(args.constraints);
       }
-      if (args.minUnits)  {
+      if (args.minUnits) {
         params['min-units'] = args.minUnits;
       }
 

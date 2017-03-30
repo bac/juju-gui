@@ -46,6 +46,17 @@
   text-align: center;
 }
 
+@mixin visible($duration: 0.5s, $delay: 0s) {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity $duration $delay;
+}
+
+@mixin hidden($duration: 0.5s, $delay: 0s) {
+  opacity: 0;
+  visibility: hidden;
+}
+
 %floating-panel {
   background-color: $white;
   border-radius: $border-radius;
@@ -91,4 +102,9 @@
   border-radius: $border-radius;
   box-shadow: 0 2px 2px rgba(0, 0, 0, .07) inset;
   font-weight: 300;
+}
+
+%constraints-select {
+  margin: 5px 10px 10px 10px;
+  width: calc(100% - 20px);
 }
