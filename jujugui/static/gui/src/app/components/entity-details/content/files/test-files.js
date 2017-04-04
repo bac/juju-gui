@@ -49,10 +49,13 @@ describe('EntityFiles', function() {
     , true);
     var output = renderer.getRenderOutput();
     var instance = renderer.getMountedInstance();
-    var archiveUrl = `${apiUrl}/trusty/django/archive`;
+    var archiveUrl = `${apiUrl}/django/archive`;
     var fileItems = [
       <li key="foo.zip" className="entity-files__file">
-        <a href={archiveUrl + '/foo.zip'} title="foo.zip" target="_blank">
+        <a href={archiveUrl + '/foo.zip'}
+          className="link"
+          title="foo.zip"
+          target="_blank">
           foo.zip
         </a>
       </li>,
@@ -66,6 +69,7 @@ describe('EntityFiles', function() {
           {[
             <li key="bar/foo.txt" className="entity-files__file">
               <a href={archiveUrl + '/bar/foo.txt'}
+                className="link"
                 title="foo.txt"
                 target="_blank">
                 foo.txt
@@ -83,6 +87,7 @@ describe('EntityFiles', function() {
         <ul className="section__list">
           <li className="entity-files__link section__list-item">
             <a ref="codeLink"
+              className="link"
               target="_blank"
               href="https://code.launchpad.net/django/code">
               View code
@@ -90,6 +95,7 @@ describe('EntityFiles', function() {
           </li>
           <li className="entity-files__link section__list-item">
             <a target="_blank"
+              className="link"
               href={archiveUrl}>
               Download .zip
             </a>
@@ -125,34 +131,40 @@ describe('EntityFiles', function() {
     assert.equal(output.refs.codeLink, undefined);
   });
 
-  it('renders file urls correctly for bundle', function() {
-    mockEntity.set('entityType', 'bundle');
-    mockEntity.set('name', 'django');
-    mockEntity.set('full_name', 'wordpress');
-    var apiUrl = 'https://api.jujucharms.com/charmstore/v4';
-    var output = testUtils.renderIntoDocument(
+  // Check that the links for files included in the given entity are rendered
+  // with the given expected path.
+  const checkFileURL = (entityType, entityId, expectedPath) => {
+    mockEntity.set('entityType', entityType);
+    mockEntity.set('id', entityId);
+    const apiUrl = 'https://api.jujucharms.com/charmstore/v5';
+    const expectedURL = apiUrl + expectedPath;
+    const output = testUtils.renderIntoDocument(
       <juju.components.EntityFiles
         apiUrl={apiUrl}
         entityModel={mockEntity}
         pluralize={sinon.spy()} />
     );
-    assert.equal(output.refs.files.children[0].children[0].href,
-      `${apiUrl}/django/archive/foo.zip`);
+    assert.equal(output.refs.files.children[0].children[0].href, expectedURL);
+  };
+
+  it('renders file URLs correctly for promulgated bundles', function() {
+    checkFileURL('bundle', 'cs:django-42', '/django-42/archive/foo.zip');
   });
 
-  it('renders file urls correctly for charm', function() {
-    mockEntity.set('entityType', 'charm');
-    mockEntity.set('name', 'django');
-    mockEntity.set('full_name', 'wordpress');
-    var apiUrl = 'https://api.jujucharms.com/charmstore/v4';
-    var output = testUtils.renderIntoDocument(
-      <juju.components.EntityFiles
-        apiUrl={apiUrl}
-        entityModel={mockEntity}
-        pluralize={sinon.spy()} />
-    );
-    assert.equal(output.refs.files.children[0].children[0].href,
-      `${apiUrl}/wordpress/archive/foo.zip`);
+  it('renders file URLs correctly for promulgated charms', function() {
+    checkFileURL(
+      'charm', 'cs:xenial/wordpress', '/xenial/wordpress/archive/foo.zip');
+  });
+
+  it('renders file URLs correctly for user owned bundles', function() {
+    checkFileURL(
+      'bundle', 'cs:~who/bundle/django-47',
+      '/~who/bundle/django-47/archive/foo.zip');
+  });
+
+  it('renders file URLs correctly for user owned charms', function() {
+    checkFileURL(
+      'charm', 'cs:~dalek/redis-0', '/~dalek/redis-0/archive/foo.zip');
   });
 
   it('properly builds a tree structure from file paths', function() {

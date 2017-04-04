@@ -23,11 +23,13 @@ YUI.add('deployment-credential-add', function() {
   juju.components.DeploymentCredentialAdd = React.createClass({
     propTypes: {
       acl: React.PropTypes.object.isRequired,
+      addNotification: React.PropTypes.func.isRequired,
       close: React.PropTypes.func.isRequired,
       cloud: React.PropTypes.object,
       generateCloudCredentialName: React.PropTypes.func.isRequired,
       getCloudProviderDetails: React.PropTypes.func.isRequired,
       getCredentials: React.PropTypes.func.isRequired,
+      sendAnalytics: React.PropTypes.func.isRequired,
       setCredential: React.PropTypes.func.isRequired,
       updateCloudCredential: React.PropTypes.func.isRequired,
       user: React.PropTypes.string,
@@ -92,6 +94,11 @@ YUI.add('deployment-credential-add', function() {
         return;
       }
       const credentialName = this.refs.credentialName.getValue();
+      this.props.sendAnalytics(
+        'Deployment Flow',
+        'Button click',
+        'Add credentials'
+      );
       props.updateCloudCredential(
         props.generateCloudCredentialName(
           props.cloud.name, props.user, credentialName),
@@ -111,7 +118,11 @@ YUI.add('deployment-credential-add', function() {
     */
     _updateCloudCredentialCallback: function(credential, error) {
       if (error) {
-        console.error('Unable to add credential', error);
+        this.props.addNotification({
+          title: 'Could not add credential',
+          message: `Could not add the credential: ${error}`,
+          level: 'error'
+        });
         return;
       }
       // Load the credentials again so that the list will contain the newly
@@ -226,8 +237,9 @@ YUI.add('deployment-credential-add', function() {
                 name="general-action-blue"
                 size="16" />
               Credentials are stored securely on our servers and we will
-              notify you by email whenever they are used. See where they are
-              used and manage or remove them via the account page.
+              notify you by email whenever they are changed or deleted.
+              You can see where they are used and manage or remove them via
+              the account page.
             </p>
           </div>
         </div>);
@@ -235,7 +247,7 @@ YUI.add('deployment-credential-add', function() {
 
     render: function() {
       var buttons = [{
-        action: this.props.close,
+        action: () => { this.props.close(true); },
         title: 'Cancel',
         type: 'neutral'
       }, {

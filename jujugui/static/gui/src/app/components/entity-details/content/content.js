@@ -28,7 +28,6 @@ YUI.add('entity-content', function() {
       entityModel: React.PropTypes.object.isRequired,
       getFile: React.PropTypes.func.isRequired,
       hasPlans: React.PropTypes.bool.isRequired,
-      isLegacyJuju: React.PropTypes.bool,
       plans: React.PropTypes.array,
       pluralize: React.PropTypes.func.isRequired,
       renderMarkdown: React.PropTypes.func.isRequired,
@@ -71,11 +70,7 @@ YUI.add('entity-content', function() {
     */
     _generateBundleConfig: function(entityModel) {
       let applications;
-      if (this.props.isLegacyJuju) {
-        applications = entityModel.get('services');
-      } else {
-        applications = entityModel.get('applications');
-      }
+      applications = entityModel.get('applications');
       if (!applications) {
         return;
       }
@@ -177,7 +172,7 @@ YUI.add('entity-content', function() {
       return list.map(function(item, i) {
         return (
           <li key={item + i}>
-            <a data-id={item} onClick={handler}>
+            <a data-id={item} className="link" onClick={handler}>
               {item}
             </a>
           </li>
@@ -237,11 +232,16 @@ YUI.add('entity-content', function() {
     */
     _generateDescription: function(entityModel) {
       if (entityModel.get('entityType') === 'charm') {
+        const description = entityModel.get('description')
+          || 'No description provided.';
+        const htmlDescription = this.props.renderMarkdown(description);
         return (
           <div className="row row--grey entity-content__description">
             <div className="inner-wrapper">
               <div className="twelve-col">
-                <p className="intro">{entityModel.get('description')}</p>
+                <div className="intro"
+                  dangerouslySetInnerHTML={{__html: htmlDescription}}>
+                </div>
               </div>
               {this._generateTags()}
             </div>
@@ -260,6 +260,8 @@ YUI.add('entity-content', function() {
       if (entityModel.get('entityType') === 'charm') {
         return (
           <juju.components.EntityResources
+            apiUrl={this.props.apiUrl}
+            entityId={entityModel.get('id')}
             pluralize={this.props.pluralize}
             resources={entityModel.get('resources')} />);
       }
@@ -316,6 +318,7 @@ YUI.add('entity-content', function() {
             {bugLink ? (
               <li>
                 <a href={bugLink}
+                  className="link"
                   target="_blank">
                   Submit a bug
                 </a>
@@ -323,6 +326,7 @@ YUI.add('entity-content', function() {
             {homepageLink ? (
               <li>
                 <a href={homepageLink}
+                  className="link"
                   target="_blank">
                   Project homepage
                 </a>
@@ -424,7 +428,7 @@ YUI.add('entity-content', function() {
     },
 
     render: function() {
-      var entityModel = this.props.entityModel;
+      const entityModel = this.props.entityModel;
       return (
         <div className="entity-content">
           {this._generateDescription(entityModel)}

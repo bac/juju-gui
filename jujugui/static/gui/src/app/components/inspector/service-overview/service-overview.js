@@ -54,8 +54,6 @@ YUI.add('service-overview', function() {
       const props = this.props;
 
       if (!props.displayPlans) {
-        // If we aren't in a Juju 2 model then do not query for
-        // or display the plans.
         return;
       }
 
@@ -224,10 +222,11 @@ YUI.add('service-overview', function() {
       }
       if (!service.get('pending')) {
         const charmId = service.get('charm');
+        const url = window.jujulib.URL.fromLegacyString(charmId);
         actions.push({
           title: 'Change version',
-          linkAction: this._viewCharmDetails.bind(this, charmId),
-          linkTitle: charmId,
+          linkAction: this._viewCharmDetails.bind(this, url),
+          linkTitle: url.path(),
           icon: 'change-version',
           action: this._navigate,
           state: {
@@ -236,8 +235,7 @@ YUI.add('service-overview', function() {
                 id: serviceId,
                 activeComponent: 'change-version'}}}});
       }
-      // If we aren't in a Juju 2 model then do not query for
-      // or display the plans.
+
       if (this.props.displayPlans && (state.activePlan || plans)) {
         actions.push({
           title: 'Plan',
@@ -256,13 +254,11 @@ YUI.add('service-overview', function() {
       The callable to view the charm details.
 
       @method _viewCharmDetails
-      @param {String} charmId The charm id.
-      @param {Object} e The click event.
+      @param {Object} url The charm URL as an instance of window.jujulib.URL.
+      @param {Object} evt The click event.
     */
-    _viewCharmDetails: function(charmId, e) {
-      this.props.changeState({
-        store: charmId.replace('cs:', '')
-      });
+    _viewCharmDetails: function(url, e) {
+      this.props.changeState({store: url.path()});
     },
 
     /**

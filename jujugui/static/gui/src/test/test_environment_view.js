@@ -217,6 +217,17 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
         'landscape', 'dump', 'juju-view-utils',
         'juju-charm-models', 'environment-change-set', 'relation-utils'
       ], function(Y) {
+        const getMockStorage = function() {
+          return new function() {
+            return {
+              store: {},
+              setItem: function(name, val) { this.store['name'] = val; },
+              getItem: function(name) { return this.store['name'] || null; }
+            };
+          };
+        };
+        const userClass = new window.jujugui.User({storage: getMockStorage()});
+        userClass.controller = {user: 'user', password: 'password'};
         testUtils = Y.namespace('juju-tests.utils');
         views = Y.namespace('juju.views');
         models = Y.namespace('juju.models');
@@ -226,7 +237,8 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
         juju = Y.namespace('juju');
         db = new models.Database();
         ecs = new juju.EnvironmentChangeSet({db: db});
-        env = new juju.environments.GoEnvironment({conn: conn, ecs: ecs});
+        env = new juju.environments.GoEnvironment({
+          conn: conn, ecs: ecs, user: userClass});
         env.connect();
         conn.open();
         fakeStore = new window.jujulib.charmstore('http://1.2.3.4/');
@@ -234,7 +246,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       });
     });
 
-    after(function(done)  {
+    after(function(done) {
       env.close(() => {
         env.destroy();
         done();
@@ -261,7 +273,8 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
           get: function() {}
         },
         charmstore: fakeStore,
-        state: {changeState: sinon.stub()}
+        state: {changeState: sinon.stub()},
+        sendAnalytics: sinon.stub()
       });
     });
 
@@ -443,9 +456,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
           // means no NaN in the paths
           var line = container.one('.relation');
           ['x1', 'y1', 'x2', 'y2'].forEach(e => {
-            Y.Lang.isNumber(
-                parseInt(line.getAttribute(e), 10))
-                        .should.equal(true);
+            isNaN(parseInt(line.getAttribute(e), 10)).should.equal(false);
           });
 
           // Verify that the node id has been munged as expected from the
@@ -1356,13 +1367,13 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
           fauxController.endpointsMap = endpointsMap;
           fauxController.set('db', db);
           var view = new views.environment(
-              { container: container,
-                db: db,
-                endpointsController: fauxController,
-                env: env,
-                charmstore: fakeStore,
-                state: {changeState: sinon.stub()}
-              });
+            { container: container,
+              db: db,
+              endpointsController: fauxController,
+              env: env,
+              charmstore: fakeStore,
+              state: {changeState: sinon.stub()}
+            });
           var service = new models.Service({
             id: 'service-1',
             charm: 'precise/mysql-1'
@@ -1459,8 +1470,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     before(function(done) {
       YUI(GlobalConfig).use(
-          ['juju-views', 'juju-models', 'charmstore-api',
-          'juju-view-utils'],
+        ['juju-views', 'juju-models', 'charmstore-api', 'juju-view-utils'],
           function(Y) {
             views = Y.namespace('juju.views');
             models = Y.namespace('juju.models');

@@ -167,8 +167,13 @@ YUI.add('juju-controller-api', function(Y) {
         }, {});
         this.setConnectedAttr('facades', facades);
         var userInfo = response['user-info'];
-        this.setConnectedAttr(
-          'controllerAccess', userInfo['controller-access']);
+        let controllerAccess = userInfo['controller-access'];
+        // This permission's name changed between versions of Juju 2.
+        // The most recent incarnation is "add-model".
+        if (controllerAccess === 'addmodel') {
+          controllerAccess = 'add-model';
+        }
+        this.setConnectedAttr('controllerAccess', controllerAccess);
         this.setConnectedAttr(
           'controllerId',
           tags.parse(tags.CONTROLLER, response['controller-tag']));
@@ -197,7 +202,7 @@ YUI.add('juju-controller-api', function(Y) {
         });
       } else {
         // If the credentials were rejected remove them.
-        this.setCredentials(null);
+        this.get('user').controller = null;
         this.failedAuthentication = true;
       }
       this.fire('login', {err: data.error || null});
@@ -246,7 +251,7 @@ YUI.add('juju-controller-api', function(Y) {
       if (this.pendingLoginResponse) {
         return;
       }
-      var credentials = this.getCredentials();
+      var credentials = this.get('user').controller;
       if (!credentials.user || !credentials.password) {
         this.fire('login', {err: 'invalid username or password'});
         return;
@@ -328,10 +333,10 @@ YUI.add('juju-controller-api', function(Y) {
           cback('authentication failed: use a proper Juju 2 release');
           return;
         }
-        this.setCredentials({
+        this.get('user').controller = {
           macaroons: macaroons,
           user: tags.parse(tags.USER, userTag)
-        });
+        };
         cback(null, response);
       };
 
@@ -350,7 +355,7 @@ YUI.add('juju-controller-api', function(Y) {
       }.bind(this);
 
       // Perform the API call.
-      var macaroons = this.getCredentials().macaroons;
+      var macaroons = this.get('user').controller.macaroons;
       sendLoginRequest(
         macaroons,
         handleResponse.bind(this, bakery, macaroons, cback)
@@ -636,7 +641,7 @@ YUI.add('juju-controller-api', function(Y) {
         };
       }
       // Retrieve the current user.
-      const credentials = this.getCredentials();
+      const credentials = this.get('user').controller;
       if (!credentials.user) {
         callback('called without credentials', []);
         return;
@@ -659,7 +664,7 @@ YUI.add('juju-controller-api', function(Y) {
             }
             let lastConnection = null;
             for (let i = 0; i < model.users.length; i++) {
-              const user =  model.users[i];
+              const user = model.users[i];
               if (user.name === credentials.user) {
                 lastConnection = user.lastConnection;
                 break;

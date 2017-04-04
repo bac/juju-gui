@@ -28,18 +28,14 @@ YUI.add('login-component', function() {
       errorMessage: React.PropTypes.string,
       getDischargeToken: React.PropTypes.func,
       gisf: React.PropTypes.bool.isRequired,
-      hideSpinner: React.PropTypes.func,
-      isLegacyJuju: React.PropTypes.bool.isRequired,
       loginToAPIs: React.PropTypes.func.isRequired,
       loginToController: React.PropTypes.func.isRequired,
       sendPost: React.PropTypes.func,
-      showSpinner: React.PropTypes.func,
       storeUser: React.PropTypes.func.isRequired
     },
 
     componentDidMount: function () {
       if (this.props.gisf) {
-        this.props.showSpinner();
         const bounce = (startTime) => {
           if (this.props.controllerIsConnected()) {
             if (this.refs.USSOLoginLink) {
@@ -68,7 +64,7 @@ YUI.add('login-component', function() {
       @param {Object} evt The submit event.
     */
     _handleLoginSubmit: function(evt) {
-      if (evt && evt.preventDefault){
+      if (evt && evt.preventDefault) {
         evt.preventDefault();
       }
       this.props.loginToAPIs({
@@ -96,32 +92,24 @@ YUI.add('login-component', function() {
       @return {Object} The message.
     */
     _generateHelpMessage: function() {
-      return this.props.isLegacyJuju ?
-        (<p>
-            Find your password with<br />
-            <code>juju api-info --password password</code>
-          </p>)
-      :
-        (<p>
-            Find your username and password with<br />
-            <code>juju show-controller --show-password</code>
-          </p>);
+      return (
+        <p>
+          Find your username and password with<br />
+          <code>juju show-controller --show-password</code>
+        </p>);
     },
 
     _generateUSSOLink: function () {
-      if (!this.props.isLegacyJuju) {
-        return (
-          <juju.components.USSOLoginLink
-            charmstore={this.props.charmstore}
-            callback={this.props.hideSpinner}
-            displayType="button"
-            getDischargeToken={this.props.getDischargeToken}
-            gisf={this.props.gisf}
-            loginToController={this.props.loginToController}
-            ref="USSOLoginLink"
-            sendPost={this.props.sendPost}
-            storeUser={this.props.storeUser} />);
-      }
+      return (
+        <juju.components.USSOLoginLink
+          charmstore={this.props.charmstore}
+          displayType="button"
+          getDischargeToken={this.props.getDischargeToken}
+          gisf={this.props.gisf}
+          loginToController={this.props.loginToController}
+          ref="USSOLoginLink"
+          sendPost={this.props.sendPost}
+          storeUser={this.props.storeUser} />);
     },
 
     _generateClassnames: function() {
@@ -163,8 +151,8 @@ YUI.add('login-component', function() {
               </label>
               <juju.components.GenericButton
                 submit={true}
-                title={"Login"}
-                type={"positive"} />
+                title={'Login'}
+                type={'positive'} />
               {this._generateUSSOLink()}
             </form>
           </div>

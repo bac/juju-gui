@@ -258,44 +258,12 @@ YUI.add('entity-header', function() {
         </li>);
     },
 
-    /**
-     When the latest version link is click, go to that version.
-   */
-    _handleRevisionClick: function(evt) {
-      evt.stopPropagation();
-      this.props.changeState({
-        search: null,
-        store: this.props.entityModel.get('latest_revision').url
-      });
-    },
-
-    /**
-      Generates the list item to link to the latest version
-      or display the latest version
-   */
-    _generateLatestRevision: function() {
-      const entityModel = this.props.entityModel;
-      const latest_revision = entityModel.get('latest_revision');
-      const revision_id = entityModel.get('revision_id');
-
-      if (latest_revision.id !== revision_id) {
-        return (<li>
-          <a onClick={this._handleRevisionClick}>
-            Latest version (#{latest_revision.id})
-          </a>
-        </li>);
-      } else {
-        return (<li>
-          Latest version (#{latest_revision.id})
-        </li>);
-      }
-    },
 
     /**
       Generates the list of series. Supports bundles, multi-series and
       single-series charms.
 
-      @method_generateSeriesList
+      @return {Object} A react "li" element for each series.
     */
     _generateSeriesList: function() {
       var series = this.props.entityModel.get('series');
@@ -305,6 +273,26 @@ YUI.add('entity-header', function() {
       series = !Array.isArray(series) ? [series] : series;
       return series.map(series =>
         <li key={series} className="entity-header__series">{series}</li>);
+    },
+
+    /**
+      Generates the list of channels. Only currently active channels are shown.
+
+      @return {Object} A react "li" element for each active channel.
+    */
+    _generateChannelList: function() {
+      const channels = this.props.entityModel.get('channels').filter(ch => {
+        return ch.current;
+      });
+      if (!channels.length) {
+        return null;
+      }
+      const names = channels.map(ch => {
+        const name = ch.name;
+        // Capitalize channel names.
+        return name.charAt(0).toUpperCase() + name.slice(1);
+      }).join(', ');
+      return <li key={names} className="entity-header__channels">{names}</li>;
     },
 
     render: function() {
@@ -341,12 +329,12 @@ YUI.add('entity-header', function() {
                 <ul className="bullets inline entity-header__properties">
                   <li className="entity-header__by">
                     By{' '}
-                    <a href={ownerUrl}
+                    <a href={ownerUrl} className="link"
                       target="_blank">{entity.owner}</a>
                   </li>
-                  {this._generateLatestRevision()}
                   {this._generateSeriesList()}
                   {this._generateCounts()}
+                  {this._generateChannelList()}
                 </ul>
                 <ul className="entity-header__social-list">
                   <li>

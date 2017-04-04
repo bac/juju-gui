@@ -6,25 +6,29 @@
 // scss-lint:enable IdSelector
 
 .header-breadcrumb {
-  @extend %list-style;
+  $breadcrumb-font-size: 23px;
+  $breadcrumb-line-height: 40px;
 
   &--link {
     position: relative;
-    border-bottom: 1px solid currentColor;
-    font-size: 23px;
+    border-bottom: 1px solid transparent;
+    font-size: $breadcrumb-font-size;
     text-decoration: none;
+    line-height: $breadcrumb-line-height;
 
     &:focus,
     &:active,
     &:hover {
+      color: $link-blue;
       text-decoration: none;
+      border-bottom-color: currentColor;
     }
 
     &:before {
       content: '/';
       position: absolute;
       left: -14px;
-      top: -2px;
+      top: -7px;
       color: $mid-grey;
     }
 
@@ -34,9 +38,52 @@
     }
   }
 
+  &__list {
+    @extend %list-style;
+  }
+
   &__list-item {
+    // Delay until after the loading message has faded out.
+    @include visible($delay: 0.5s);
     float: left;
-    padding-left: 20px;
     margin-bottom: 0;
+    padding-left: 20px;
+  }
+
+  &__loading {
+    @include hidden;
+    font-size: $breadcrumb-font-size;
+    line-height: $breadcrumb-line-height;
+    margin-left: 20px;
+    position: absolute;
+
+    @keyframes ellipsis {
+      to {
+        width: 1.5em;
+      }
+    }
+
+    &:after {
+      overflow: hidden;
+      text-overflow: hidden;
+      display: inline-block;
+      vertical-align: bottom;
+      animation: ellipsis steps(4, end) 900ms infinite;
+      content: '\2026';
+      width: 0px
+    }
+  }
+
+  &--loading-model {
+    .header-breadcrumb {
+      &__list-item {
+        @include hidden;
+      }
+
+      &__loading {
+        // Delay until after the breadcrumb has faded out.
+        @include visible($delay: 0.5s);
+      }
+    }
   }
 }

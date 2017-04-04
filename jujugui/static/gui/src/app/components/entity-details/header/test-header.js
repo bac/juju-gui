@@ -42,7 +42,7 @@ describe('EntityHeader', function() {
   });
 
   it('renders the latest entity properly', function() {
-    var renderer = jsTestUtils.shallowRender(
+    const renderer = jsTestUtils.shallowRender(
         <juju.components.EntityHeader
           acl={acl}
           addNotification={sinon.stub()}
@@ -54,10 +54,11 @@ describe('EntityHeader', function() {
           hasPlans={false}
           importBundleYAML={sinon.stub()}
           pluralize={sinon.stub()}
-          scrollPosition={0} />, true);
-    var instance = renderer.getMountedInstance();
-    var output = renderer.getRenderOutput();
-    var expected = (
+          scrollPosition={0}
+        />, true);
+    const instance = renderer.getMountedInstance();
+    const output = renderer.getRenderOutput();
+    const expected = (
       <div className="row-hero"
         ref="headerWrapper"
         style={{}}>
@@ -79,15 +80,17 @@ describe('EntityHeader', function() {
                 <li className="entity-header__by">
                   By{' '}
                   <a href="https://launchpad.net/~test-owner"
+                    className="link"
                     target="_blank">test-owner</a>
-                </li>
-                <li>
-                  {'Latest version (#'}{123}{')'}
                 </li>
                 {[<li key="trusty" className="entity-header__series">
                   trusty
                 </li>]}
                 {undefined}
+                {<li key="Stable, Candidate"
+                  className="entity-header__channels">
+                  Stable, Candidate
+                </li>}
               </ul>
               <ul className="entity-header__social-list">
                 <li>
@@ -259,15 +262,15 @@ describe('EntityHeader', function() {
     var output = renderer.getRenderOutput();
     var expected = (
       <li>
-        {3} {"applications"},
+        {3} {'applications'},
         &nbsp;
-        {2} {"machines"},
+        {2} {'machines'},
         &nbsp;
-        {5} {"units"}
+        {5} {'units'}
       </li>);
     assert.deepEqual(
       output.props.children.props.children.props.children[0]
-        .props.children[2].props.children[3], expected);
+        .props.children[2].props.children[2], expected);
   });
 
   it('displays an add to model button', function() {

@@ -32,10 +32,22 @@ describe('Controller API', function() {
     });
   });
 
+  const getMockStorage = function() {
+    return new function() {
+      return {
+        store: {},
+        setItem: function(name, val) { this.store['name'] = val; },
+        getItem: function(name) { return this.store['name'] || null; }
+      };
+    };
+  };
+
   beforeEach(function() {
+    const user = new window.jujugui.User({storage: getMockStorage()});
+    user.controller = {user: 'user', password: 'password'};
     conn = new utils.SocketStub();
     controllerAPI = new juju.ControllerAPI({
-      conn: conn, user: 'user', password: 'password'
+      conn: conn, user: user
     });
     controllerAPI.connect();
     controllerAPI.set('facades', {
@@ -53,10 +65,8 @@ describe('Controller API', function() {
     cleanups = [];
   });
 
-  afterEach(function()  {
+  afterEach(function() {
     cleanups.forEach(function(action) {action();});
-    // We need to clear any credentials stored in sessionStorage.
-    controllerAPI.setCredentials(null);
     if (controllerAPI && controllerAPI.destroy) {controllerAPI.destroy();}
     if (conn && conn.destroy) {conn.destroy();}
   });
@@ -139,7 +149,9 @@ describe('Controller API', function() {
     });
 
     it('stops the pinger when the controller is destroyed', function(done) {
-      const api = new juju.ControllerAPI({conn: conn});
+      const userClass = new window.jujugui.User({storage: getMockStorage()});
+      userClass.controller = {user: 'user', password: 'password'};
+      const api = new juju.ControllerAPI({conn: conn, user: userClass});
       api.after('destroy', evt => {
         assert.strictEqual(setInterval.calledOnce, true, 'setInterval');
         assert.strictEqual(clearInterval.calledOnce, true, 'clearInterval');
@@ -192,7 +204,8 @@ describe('Controller API', function() {
 
     it('sends the correct login message for external users', () => {
       noopHandleLogin();
-      controllerAPI.setCredentials({user: 'who@external', password: 'pswd'});
+      controllerAPI.get('user').controller = {
+        user: 'who@external', password: 'pswd'};
       controllerAPI.login();
       const lastMessage = conn.last_message();
       const expected = {
@@ -210,7 +223,7 @@ describe('Controller API', function() {
       // Assume login to be the first request.
       conn.msg({'request-id': 1, error: 'Invalid user or password'});
       assert.deepEqual(
-        controllerAPI.getCredentials(),
+        controllerAPI.get('user').controller,
         {user: '', password: '', macaroons: null});
       assert.isTrue(controllerAPI.failedAuthentication);
     });
@@ -266,7 +279,7 @@ describe('Controller API', function() {
     });
 
     it('avoids sending login requests without credentials', function() {
-      controllerAPI.setCredentials(null);
+      controllerAPI.get('user').controller = {};
       controllerAPI.login();
       assert.equal(0, conn.messages.length);
     });
@@ -280,9 +293,23 @@ describe('Controller API', function() {
           {name: 'ModelManager', versions: [2]}
         ],
         'controller-tag': 'controller-42',
+        'user-info': {'controller-access': 'add-model', 'model-access': ''}
+      }});
+      assert.strictEqual(controllerAPI.get('controllerAccess'), 'add-model');
+    });
+
+    it('stores user information (legacy addmodel)', function() {
+      controllerAPI.login();
+      // Assume login to be the first request.
+      conn.msg({'request-id': 1, response: {
+        facades: [
+          {name: 'Client', versions: [0]},
+          {name: 'ModelManager', versions: [2]}
+        ],
+        'controller-tag': 'controller-42',
         'user-info': {'controller-access': 'addmodel', 'model-access': ''}
       }});
-      assert.strictEqual(controllerAPI.get('controllerAccess'), 'addmodel');
+      assert.strictEqual(controllerAPI.get('controllerAccess'), 'add-model');
     });
   });
 
@@ -330,7 +357,7 @@ describe('Controller API', function() {
     });
 
     it('sends an initial login request with macaroons', function() {
-      controllerAPI.setCredentials({macaroons: ['macaroon']});
+      controllerAPI.get('user').controller = {macaroons: ['macaroon']};
       controllerAPI.loginWithMacaroon(makeBakery());
       assert.strictEqual(conn.messages.length, 1, 'unexpected msg number');
       assertRequest(conn.last_message(), ['macaroon']);
@@ -411,7 +438,7 @@ describe('Controller API', function() {
         }
       });
       assert.strictEqual(error, null);
-      const creds = controllerAPI.getCredentials();
+      const creds = controllerAPI.get('user').controller;
       assert.strictEqual(creds.user, 'who@local');
       assert.strictEqual(creds.password, '');
       assert.deepEqual(creds.macaroons, ['macaroon', 'discharge']);
@@ -422,8 +449,8 @@ describe('Controller API', function() {
     });
 
     it('succeeds with already stored macaroons', function() {
-      controllerAPI.setCredentials(
-        {macaroons: ['already stored', 'macaroons']});
+      controllerAPI.get('user').controller = {
+        macaroons: ['already stored', 'macaroons']};
       controllerAPI.loginWithMacaroon(makeBakery(), callback);
       assert.strictEqual(conn.messages.length, 1, 'unexpected msg number');
       const requestId = assertRequest(
@@ -440,7 +467,7 @@ describe('Controller API', function() {
         }
       });
       assert.strictEqual(error, null);
-      const creds = controllerAPI.getCredentials();
+      const creds = controllerAPI.get('user').controller;
       assert.strictEqual(creds.user, 'dalek@local');
       assert.strictEqual(creds.password, '');
       assert.deepEqual(creds.macaroons, ['already stored', 'macaroons']);
@@ -930,64 +957,12 @@ describe('Controller API', function() {
       conn.msg({'request-id': 1, response: {results: []}});
     });
 
-    it('retrieves model info for a sandbox model', done => {
-      // Perform the request.
-      const id = 'sandbox1';
-      controllerAPI.modelInfo([id], (err, models) => {
-        assert.strictEqual(err, null);
-        assert.strictEqual(models.length, 1);
-        const result = models[0];
-        assert.strictEqual(result.id, id);
-        assert.strictEqual(result.name, 'sandbox');
-        assert.strictEqual(result.series, 'trusty');
-        assert.strictEqual(result.provider, 'demonstration');
-        assert.strictEqual(result.uuid, 'sandbox1');
-        assert.strictEqual(result.credential, '');
-        assert.strictEqual(result.region, null);
-        assert.strictEqual(result.cloud, '');
-        assert.strictEqual(result.numMachines, 0);
-        assert.deepEqual(result.users, []);
-        assert.strictEqual(result.life, 'alive');
-        assert.strictEqual(result.owner, 'admin@local');
-        assert.strictEqual(result.isAlive, true, 'unexpected zombie model');
-        assert.strictEqual(
-          result.isController, false, 'unexpected controller model');
-        assert.equal(conn.messages.length, 1);
-        assert.deepEqual(conn.last_message(), {
-          type: 'ModelManager',
-          version: 2,
-          request: 'ModelInfo',
-          params: {entities: [{tag: 'model-' + id}]},
-          'request-id': 1
-        });
-        done();
-      });
-      // Mimic response.
-      conn.msg({
-        'request-id': 1,
-        response: {
-          results: [{
-            result: {
-              'default-series': 'trusty',
-              name: 'sandbox',
-              'provider-type': 'demonstration',
-              uuid: 'sandbox1',
-              'controller-uuid': 'controlleruuid1',
-              machines: [],
-              users: [],
-              life: 'alive',
-              'owner-tag': 'user-admin@local'
-            }
-          }]
-        }
-      });
-    });
-
   });
 
   describe('listModelsWithInfo', function() {
     it('info for a single model', done => {
-      controllerAPI.setCredentials({user: 'who@external', password: 'tardis'});
+      controllerAPI.get('user').controller = {
+        user: 'who@external', password: 'tardis'};
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, null);
@@ -1105,8 +1080,8 @@ describe('Controller API', function() {
     });
 
     it('info for multiple models', done => {
-      controllerAPI.setCredentials(
-        {user: 'dalek@external', password: 'exterminate'});
+      controllerAPI.get('user').controller =
+        {user: 'dalek@external', password: 'exterminate'};
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, null);
@@ -1264,7 +1239,7 @@ describe('Controller API', function() {
     });
 
     it('credentials error', done => {
-      controllerAPI.setCredentials(null);
+      controllerAPI.get('user').controller = {};
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, 'called without credentials');
@@ -1275,7 +1250,7 @@ describe('Controller API', function() {
 
     it('list models error', done => {
       // Perform the request.
-      controllerAPI.listModelsWithInfo((err, models) =>  {
+      controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, 'bad wolf');
         assert.deepEqual(models, []);
         done();
@@ -1287,7 +1262,7 @@ describe('Controller API', function() {
 
     it('model info error', done => {
       // Perform the request.
-      controllerAPI.listModelsWithInfo((err, models) =>  {
+      controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, 'bad wolf');
         assert.deepEqual(models, []);
         done();
@@ -1313,7 +1288,7 @@ describe('Controller API', function() {
 
     it('specific model response error', done => {
       // Perform the request.
-      controllerAPI.listModelsWithInfo((err, models) =>  {
+      controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, null);
         assert.strictEqual(models.length, 1);
         const result = models[0];

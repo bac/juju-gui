@@ -6,15 +6,25 @@
   }
 
   &__description {
-
-    .twelve-col,
-    p {
+    .twelve-col {
       margin: 0;
+    }
+
+    .intro {
+      // Apply to a variety of block-level elements.
+      blockquote,
+      dd,
+      dt,
+      li,
+      p,
+      pre {
+        font-size: 1.25em;
+      }
     }
   }
 
   &__metadata {
-    margin-top: 80px;
+    margin-top: 40px;
     font-size: 16px;
     font-weight: 100;
 
@@ -62,7 +72,7 @@
 
       &-quantity {
         font-size: 1.1em;
-        color: $warm-grey;
+        color: $dark-warm-grey;
       }
 
       &-item:last-child {
@@ -160,8 +170,8 @@
     }
   }
 
-  .revisions {
-    padding-bottom: 20px;
+  .revisions h3 {
+    margin-bottom: 0;
   }
 
   .revisions__list {
@@ -175,7 +185,7 @@
     }
 
     &-meta {
-      color: $warm-grey;
+      color: $dark-warm-grey;
       margin-bottom: .2em;
       font-size: 14px;
     }

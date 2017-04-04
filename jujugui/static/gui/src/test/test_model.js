@@ -39,8 +39,6 @@ describe('test_model.js', function() {
       charm.get('revision').should.equal(0);
       charm.get('full_name').should.equal(
           '~alt-bac/precise/openstack-dashboard');
-      charm.get('charm_path').should.equal(
-          '~alt-bac/precise/openstack-dashboard-0/json');
     });
 
     it('must not set "owner" for promulgated charms', function() {
@@ -54,24 +52,18 @@ describe('test_model.js', function() {
       var charm = new models.Charm(
           {id: 'cs:~alt-bac/precise/openstack-dashboard'});
       assert.isUndefined(charm.get('revision'));
-      assert.equal(charm.get('charm_path'),
-          '~alt-bac/precise/openstack-dashboard/json');
     });
 
     it('must accept charm ids with periods.', function() {
       var charm = new models.Charm(
           {id: 'cs:~alt.bac/precise/openstack-dashboard-0'});
       assert.equal(charm.get('owner'), 'alt.bac');
-      assert.equal(charm.get('charm_path'),
-          '~alt.bac/precise/openstack-dashboard-0/json');
     });
 
     it('must accept charm ids without series.', function() {
       var charm = new models.Charm(
           {id: 'cs:~alt-bac/openstack-dashboard'});
       assert.isUndefined(charm.get('series'));
-      assert.equal(charm.get('charm_path'),
-          '~alt-bac/openstack-dashboard/json');
     });
 
     it('generates a proper full_name for multi-series charms', () => {
@@ -400,10 +392,10 @@ describe('test_model.js', function() {
           [{'pending': 2}, {}]);
       assert.deepEqual(wordpress.get('units')
                        .get_informative_states_for_service(wordpress),
-          [{'pending': 1, 'error': 3}, {
-            mysql: 'db-relation-changed',
-            wordpress: 'peer-relation-broken'
-          }]);
+        [{'pending': 1, 'error': 3}, {
+          mysql: 'db-relation-changed',
+          wordpress: 'peer-relation-broken'
+        }]);
     });
 
     it('service unit list should update analytics when units are added',
@@ -564,15 +556,6 @@ describe('test_model.js', function() {
           }]
         ]}});
         assert.equal(mysql.get('units').size(), 1);
-      });
-
-      it('should handle messages from legacy Juju versions', function() {
-        var db = new models.Database();
-        db.onDelta({data: {result: [
-          ['serviceLegacyInfo', 'add', {Name: 'django'}]
-        ]}});
-        assert.strictEqual(db.services.size(), 1);
-        assert.strictEqual(db.services.item(0).get('id'), 'django');
       });
 
       it('should create non-existing machines on change', function() {
@@ -793,7 +776,7 @@ describe('test_model.js', function() {
                  endpoints:
                  [['something', {name: 'foo', role: 'bar'}],
                   ['mysql', {name: 'la', role: 'lee'}]],
-                        'interface': 'thing' });
+                 'interface': 'thing' });
          db.relations.add([rel0, rel1, rel2, rel3, rel4]);
          db.relations.get_relations_for_service(service).map(
          function(r) { return r.get('id'); })
@@ -1566,8 +1549,20 @@ describe('test_model.js', function() {
     });
 
     beforeEach(function() {
+      const getMockStorage = function() {
+        return new function() {
+          return {
+            store: {},
+            setItem: function(name, val) { this.store['name'] = val; },
+            getItem: function(name) { return this.store['name'] || null; }
+          };
+        };
+      };
+      const userClass = new window.jujugui.User({storage: getMockStorage()});
+      userClass.controller = {user: 'user', password: 'password'};
       conn = new (Y.namespace('juju-tests.utils')).SocketStub();
-      env = new juju.environments.GoEnvironment({conn: conn});
+      env = new juju.environments.GoEnvironment({
+        conn: conn, user: userClass});
       env.connect();
       env.set('facades', {Client: [0], Charms: [1]});
       conn.open();
@@ -1871,17 +1866,17 @@ describe('test_model.js', function() {
 
       // Add the charms so we can resolve them in the export.
       db.charms.add([{id: 'precise/mysql-1'},
-            {id: 'precise/wordpress-1',
-              options: {
-                debug: {
-                  'default': 'no'
-                },
-                username: {
-                  'default': 'root'
-                }
-              }
+        {id: 'precise/wordpress-1',
+          options: {
+            debug: {
+              'default': 'no'
+            },
+            username: {
+              'default': 'root'
             }
-          ]);
+          }
+        }
+      ]);
       var result = db.exportDeployer(true);
 
       assert.strictEqual(result.relations.length, 1);
@@ -2062,26 +2057,26 @@ describe('test_model.js', function() {
         annotations: {'gui-x': 100, 'gui-y': 200}
       });
       db.charms.add([{id: 'precise/mysql-1'},
-            {id: 'precise/wordpress-1',
-              options: {
-                one: {
-                  'default': ''
-                },
-                two: {
-                  'default': null
-                },
-                three: {
-                  'default': undefined
-                },
-                four: {
-                  'default': '0'
-                },
-                five: {
-                  'default': false
-                }
-              }
+        {id: 'precise/wordpress-1',
+          options: {
+            one: {
+              'default': ''
+            },
+            two: {
+              'default': null
+            },
+            three: {
+              'default': undefined
+            },
+            four: {
+              'default': '0'
+            },
+            five: {
+              'default': false
             }
-          ]);
+          }
+        }
+      ]);
       var result = db.exportDeployer(true);
       assert.equal(result.services.wordpress.options.one, '1');
       assert.equal(result.services.wordpress.options.two, '2');
@@ -2567,62 +2562,6 @@ describe('test_model.js', function() {
       });
     });
 
-    describe('updateSubordinateUnits', function() {
-      var db;
-      beforeEach(function() {
-        db = new models.Database();
-        db.services = list;
-        rails.set('subordinate', true);
-        db.addUnits({
-          id: 'mysql/0'
-        });
-        db.addUnits({
-          id: 'django/0'
-        });
-
-        db.relations.add([
-          {
-            id: 'rails:db mysql:db',
-            endpoints: [
-              ['mysql', {name: 'db', role: 'provider'}],
-              ['rails', {name: 'db', role: 'requirer'}]
-            ],
-            interface: 'mysql',
-            scope: 'container'
-          },
-          {
-            id: 'rails:sub django:sub',
-            endpoints: [
-              ['django', {name: 'sub', role: 'provider'}],
-              ['rails', {name: 'sub', role: 'requirer'}]
-            ],
-            interface: 'django',
-            scope: 'container'
-          },
-          {
-            id: 'rails:nonsub django:nonsub',
-            endpoints: [
-              ['django', {name: 'nonsub', role: 'provider'}],
-              ['rails', {name: 'nonsub', role: 'requirer'}]
-            ],
-            interface: 'django',
-            scope: 'global'
-          }
-        ]);
-      });
-
-      it('updates subordinate unit lists', function() {
-        assert.equal(rails.get('units').size(), 0);
-        rails.updateSubordinateUnits(db);
-        assert.equal(rails.get('units').size(), 2);
-      });
-
-      it('attempts to update opposite units if not subordinate', function() {
-        assert.equal(rails.get('units').size(), 0);
-        mysql.updateSubordinateUnits(db);
-        assert.equal(rails.get('units').size(), 2);
-      });
-    });
   });
 
   describe('db.charms.addFromCharmData', function() {

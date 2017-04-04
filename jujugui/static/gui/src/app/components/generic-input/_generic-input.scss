@@ -3,7 +3,7 @@
 
   &__label {
     // Needs to be positioned to appear above the input.
-    color: $warm-grey;
+    color: $dark-warm-grey;
     left: 10px;
     position: absolute;
     top: 17px;
@@ -47,4 +47,10 @@
     background-position: 0 4px;
     padding-left: 25px;
   }
+
+  .svg-icon {
+    position: absolute;
+    right: 0.625rem;
+    top: 1.375rem;
+ }
 }

@@ -29,7 +29,7 @@ YUI.add('acl', function(Y) {
     Note that the controller access is described by the following values:
     - "login": users can log into the controller and only list the models they
       own;
-    - "addmodel": users can add models;
+    - "add-model": users can add models;
     - "superuser": users can do everything they want with the controller,
       including listing/removing all models owned by any users.
     The model access holds the following values:
@@ -44,12 +44,6 @@ YUI.add('acl', function(Y) {
     @return {Object} A namespace providing access to ACLs checkers (see below).
   */
   juju.generateAcl = function (controllerAPI, modelAPI) {
-    if (!controllerAPI) {
-      // The application is connected to a legacy Juju.
-      controllerAPI = {
-        get: (_) => ''
-      };
-    }
     const acl = {
       /**
         Report whether the model interaction is read-only, in which case it is
@@ -71,7 +65,7 @@ YUI.add('acl', function(Y) {
           modelAPI.get('controllerAccess') ||
           controllerAPI.get('controllerAccess')
         );
-        return access === 'addmodel' || access === 'superuser';
+        return access === 'add-model' || access === 'superuser';
       },
 
       /**

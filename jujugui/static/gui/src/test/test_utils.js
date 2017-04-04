@@ -42,21 +42,15 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
       var exportFilename =
         views.utils._genereateBundleExportFileName(envName, date);
       assert.equal(exportFilename, 'foo-bar-2014-01-13.yaml');
-
-      var envName = 'sandbox';
-      var date = new Date('October 1, 2014 11:13:00');
-      var exportFilename =
-        views.utils._genereateBundleExportFileName(envName, date);
-      assert.equal(exportFilename, 'sandbox-2014-10-01.yaml');
     });
   });
 }) ();
 
 describe('utilities', function() {
-  var Y, views, models, utils;
+  var views, models, utils;
 
   before(function(done) {
-    Y = YUI(GlobalConfig).use(['juju-views', 'juju-models'], function(Y) {
+    YUI(GlobalConfig).use(['juju-views', 'juju-models'], function(Y) {
       views = Y.namespace('juju.views');
       models = Y.namespace('juju.models');
       utils = Y.namespace('juju.views.utils');
@@ -65,7 +59,7 @@ describe('utilities', function() {
   });
 
   it('must be able to display humanize time ago messages', function() {
-    var now = Y.Lang.now();
+    var now = new Date().getTime();
     // Javascript timestamps are in milliseconds
     views.humanizeTimestamp(now).should.equal('less than a minute ago');
     views.humanizeTimestamp(now + 600000).should.equal('10 minutes ago');
@@ -928,14 +922,12 @@ describe('utilities', function() {
     it('can switch models', function() {
       const app = {
         set: sinon.stub().withArgs('modelUUID'),
-        showConnectingMask: sinon.stub().withArgs(),
         state: {changeState: sinon.stub()}
       };
       const env = {set: sinon.stub()};
       const model = {id: 'my-uuid', name: 'mymodel', 'owner': 'who'};
       utils._switchModel.call(app, env, model);
       assert.equal(utils._hidePopup.callCount, 1, '_hidePopup');
-      assert.equal(app.showConnectingMask.callCount, 1, 'showConnectingMask');
       assert.equal(app.state.changeState.callCount, 1, 'changeState');
       assert.deepEqual(app.state.changeState.args[0], [{
         profile: null,
@@ -952,7 +944,6 @@ describe('utilities', function() {
     it('changes to disconnected mode if model is missing', function() {
       const app = {
         set: sinon.stub().withArgs('modelUUID'),
-        showConnectingMask: sinon.stub().withArgs(),
         state: {changeState: sinon.stub()}
       };
       const env = {set: sinon.stub()};
@@ -968,7 +959,6 @@ describe('utilities', function() {
     it('does not set root state to new if profile state exists', function() {
       const app = {
         set: sinon.stub().withArgs('modelUUID'),
-        showConnectingMask: sinon.stub().withArgs(),
         state: {current: {profile: 'animal'}, changeState: sinon.stub()}
       };
       const env = {set: sinon.stub()};
@@ -1054,6 +1044,17 @@ describe('utilities', function() {
     });
 
     beforeEach(function() {
+      const getMockStorage = function() {
+        return new function() {
+          return {
+            store: {},
+            setItem: function(name, val) { this.store['name'] = val; },
+            getItem: function(name) { return this.store['name'] || null; }
+          };
+        };
+      };
+      const userClass = new window.jujugui.User({storage: getMockStorage()});
+      userClass.controller = {user: 'user', password: 'password'};
       callback = sinon.stub();
       commit = sinon.stub();
       envGet = sinon.stub();
@@ -1065,11 +1066,9 @@ describe('utilities', function() {
           get: envGet,
           on: sinon.stub(),
           set: sinon.stub(),
-          setCredentials: sinon.stub()
         },
         controllerAPI: {
           createModel: sinon.stub(),
-          getCredentials: sinon.stub().returns({user: 'user-spinach'}),
         },
         _autoPlaceUnits: sinon.stub(),
         db: {
@@ -1081,11 +1080,10 @@ describe('utilities', function() {
         createSocketURL: sinon.stub().returns('wss://socket-url'),
         get: sinon.stub().returns('wss://socket-url'),
         switchEnv: sinon.stub(),
-        showConnectingMask: sinon.stub(),
-        hideConnectingMask: sinon.stub(),
         state: {
           changeState: sinon.stub()
-        }
+        },
+        user: userClass,
       };
     });
 
@@ -1118,7 +1116,7 @@ describe('utilities', function() {
       assert.equal(app.controllerAPI.createModel.callCount, 1);
       const args = app.controllerAPI.createModel.args[0];
       assert.strictEqual(args[0], 'new-model');
-      assert.strictEqual(args[1], 'user-spinach');
+      assert.strictEqual(args[1], 'user@local');
       assert.deepEqual(args[2], {
         credential: 'the-credential',
         cloud: 'azure',
@@ -1247,6 +1245,177 @@ describe('utilities', function() {
     it('can get details for a provider', function() {
       const provider = utils.getCloudProviderDetails('gce');
       assert.equal(provider.id, 'google');
+    });
+  });
+
+  describe('isValue', function() {
+    let utils;
+
+    before(function(done) {
+      YUI(GlobalConfig).use('juju-view-utils', function(Y) {
+        utils = Y.namespace('juju.views.utils');
+        done();
+      });
+    });
+
+    it('can check a value is set and not null', function() {
+      assert.equal(utils.isValue('string'), true);
+      assert.equal(utils.isValue(''), true);
+      assert.equal(utils.isValue(1), true);
+      assert.equal(utils.isValue(0), true);
+      assert.equal(utils.isValue({key: 'value'}), true);
+      assert.equal(utils.isValue({}), true);
+      assert.equal(utils.isValue(['array']), true);
+      assert.equal(utils.isValue([]), true);
+      assert.equal(utils.isValue(undefined), false);
+      assert.equal(utils.isValue(null), false);
+    });
+  });
+
+  describe('isObject', function() {
+    let utils;
+
+    before(function(done) {
+      YUI(GlobalConfig).use('juju-view-utils', function(Y) {
+        utils = Y.namespace('juju.views.utils');
+        done();
+      });
+    });
+
+    it('can check a value is an object', function() {
+      assert.equal(utils.isObject({key: 'value'}), true);
+      assert.equal(utils.isObject({}), true);
+      assert.equal(utils.isObject([]), false);
+      assert.equal(utils.isObject(undefined), false);
+      assert.equal(utils.isObject(null), false);
+    });
+  });
+
+  describe('parseQueryString', function() {
+    let utils;
+
+    before(function(done) {
+      YUI(GlobalConfig).use('juju-view-utils', function(Y) {
+        utils = Y.namespace('juju.views.utils');
+        done();
+      });
+    });
+
+    it('can return a parsed query string', function() {
+      assert.deepEqual(utils.parseQueryString(
+        'http://example.com?one=1&two=2'), {
+          one: '1',
+          two: '2'
+        });
+    });
+
+    it('can handle being passed only the querystring', function() {
+      assert.deepEqual(utils.parseQueryString(
+        '?one=1&two=2'), {
+          one: '1',
+          two: '2'
+        });
+    });
+
+    it('can handle being passed a querystring without a "?"', function() {
+      assert.deepEqual(utils.parseQueryString(
+        'one=1&two=2'), {
+          one: '1',
+          two: '2'
+        });
+    });
+
+    it('can handle a URL with no querystring', function() {
+      assert.deepEqual(utils.parseQueryString(
+        'http://example.com'), {});
+    });
+
+    it('can handle a querystring with no values', function() {
+      assert.deepEqual(utils.parseQueryString(
+        'http://example.com?'), {});
+    });
+
+    it('can handle a URL with multiple question marks', function() {
+      assert.deepEqual(utils.parseQueryString(
+        'http://example.com??one=1&two=2'), {
+          one: '1',
+          two: '2'
+        });
+    });
+
+    it('can handle a URL with multiple querystrings', function() {
+      assert.deepEqual(utils.parseQueryString(
+        'http://example.com?one=1&two=2?one=1&two=2'), {
+          one: ['1', '1'],
+          two: ['2', '2']
+        });
+    });
+
+    it('does not return empty values', function() {
+      assert.deepEqual(utils.parseQueryString('http://example.com?one=1&'), {
+        one: '1'
+      });
+    });
+
+    it('returns null when there is no set value', function() {
+      assert.deepEqual(utils.parseQueryString('http://example.com?one='), {
+        one: null
+      });
+    });
+
+    it('can handle unfinished values', function() {
+      assert.deepEqual(
+        utils.parseQueryString('http://example.com?one=&two=2'), {
+          one: null,
+          two: '2'
+        });
+    });
+
+    it('can handle duplicate keys', function() {
+      assert.deepEqual(
+        utils.parseQueryString('http://example.com?one=1&one=2'), {
+          one: ['1', '2'],
+        });
+    });
+  });
+
+  describe('validateForm', function() {
+    let utils;
+
+    before(function(done) {
+      YUI(GlobalConfig).use('juju-view-utils', function(Y) {
+        utils = Y.namespace('juju.views.utils');
+        done();
+      });
+    });
+
+    it('can validate a form with an invalid field', function() {
+      const refs = {
+        one: {validate: sinon.stub().returns(false)},
+        two: {validate: sinon.stub().returns(true)}
+      };
+      const fields = ['one', 'two'];
+      assert.isFalse(utils.validateForm(fields, refs));
+    });
+
+    it('can validate a form with valid fields', function() {
+      const refs = {
+        one: {validate: sinon.stub().returns(true)},
+        two: {validate: sinon.stub().returns(true)}
+      };
+      const fields = ['one', 'two'];
+      assert.isTrue(utils.validateForm(fields, refs));
+    });
+
+    it('validates all fields even if one field is invalid', function() {
+      const refs = {
+        one: {validate: sinon.stub().returns(false)},
+        two: {validate: sinon.stub().returns(true)}
+      };
+      const fields = ['one', 'two'];
+      utils.validateForm(fields, refs);
+      assert.equal(refs.one.validate.callCount, 1);
+      assert.equal(refs.two.validate.callCount, 1);
     });
   });
 })();

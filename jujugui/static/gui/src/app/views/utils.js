@@ -212,7 +212,7 @@ YUI.add('juju-view-utils', function(Y) {
     var l = timestrings,
         prefix = l.prefixAgo,
         suffix = l.suffixAgo,
-        distanceMillis = Y.Lang.now() - t,
+        distanceMillis = new Date().getTime() - t,
         seconds = Math.abs(distanceMillis) / 1000,
         minutes = seconds / 60,
         hours = minutes / 60,
@@ -335,7 +335,7 @@ YUI.add('juju-view-utils', function(Y) {
         return this.topology.serviceForBox(this);
       },
       set: function(value) {
-        if (Y.Lang.isValue(value)) {
+        if (utils.isValue(value)) {
           Y.mix(this, value.getAttrs(), true);
           this._modelName = value.name;
         }
@@ -497,7 +497,7 @@ YUI.add('juju-view-utils', function(Y) {
           const ep = connectors[key];
           // Take the distance of each XY pair
           var d = this._distance(source, ep);
-          if (!Y.Lang.isValue(result) || d < shortest_d) {
+          if (!utils.isValue(result) || d < shortest_d) {
             shortest_d = d;
             result = ep;
           }
@@ -524,7 +524,7 @@ YUI.add('juju-view-utils', function(Y) {
             const ep2 = oc[key];
             // Take the distance of each XY pair
             var d = this._distance(ep1, ep2);
-            if (!Y.Lang.isValue(result) || d < shortest_d) {
+            if (!utils.isValue(result) || d < shortest_d) {
               shortest_d = d;
               result = [ep1, ep2];
             }
@@ -566,7 +566,7 @@ YUI.add('juju-view-utils', function(Y) {
   views.toBoundingBoxes = function(module, services, existing, env) {
     var result = existing || {};
     Object.keys(result).forEach(key => {
-      if (!Y.Lang.isValue(services.getById(key))) {
+      if (!utils.isValue(services.getById(key))) {
         delete result[key];
       }
     });
@@ -654,9 +654,9 @@ YUI.add('juju-view-utils', function(Y) {
   utils._genereateBundleExportFileName = function(envName, date=new Date()) {
     var fileExtension = '.yaml';
     return [envName,
-        date.getFullYear(),
-        ('0' + (date.getMonth() + 1)).slice(-2),
-        ('0' + date.getDate()).slice(-2)].join('-') + fileExtension;
+      date.getFullYear(),
+      ('0' + (date.getMonth() + 1)).slice(-2),
+      ('0' + date.getDate()).slice(-2)].join('-') + fileExtension;
   },
 
   /**
@@ -1383,8 +1383,6 @@ YUI.add('juju-view-utils', function(Y) {
     // Remove the switch model confirmation popup if it has been displayed to
     // the user.
     utils._hidePopup();
-    // Show the model connection mask.
-    this.showConnectingMask();
     // Reset the state of the GUI ready for displaying the new model.
     const newState = {profile: null, gui: null, root: null};
     let name = '';
@@ -1473,6 +1471,7 @@ YUI.add('juju-view-utils', function(Y) {
   utils.deploy = function(app, callback, autoplace=true, modelName, args) {
     const env = app.env;
     const controllerAPI = app.controllerAPI;
+    const user = app.user;
     if (autoplace) {
       app._autoPlaceUnits();
     }
@@ -1500,7 +1499,6 @@ YUI.add('juju-view-utils', function(Y) {
           name: model.name,
           owner: model.owner
         });
-        app.hideConnectingMask();
         callback(null);
       };
       app.set('modelUUID', model.uuid);
@@ -1509,7 +1507,7 @@ YUI.add('juju-view-utils', function(Y) {
       app.switchEnv(socketUrl, null, null, commit, true, false);
     };
     controllerAPI.createModel(
-      modelName, controllerAPI.getCredentials().user, args, handler);
+      modelName, user.controller.user, args, handler);
   };
 
   /**
@@ -1521,6 +1519,68 @@ YUI.add('juju-view-utils', function(Y) {
   */
   utils.isRedirectError = function(error) {
     return error === 'authentication failed: redirection required';
+  };
+
+  /**
+    Check that a value is valid and not null.
+
+    @method isValue
+    @param {Any} value The value to check.
+    @returns {Boolean} Whether the value is not undefined, null or NaN.
+  */
+  utils.isValue = value => {
+    return value !== undefined && value !== null;
+  };
+
+  /**
+    Check that a value is an object.
+
+    @method isObject
+    @param {Any} value The value to check.
+    @returns {Boolean} Whether the value is an object.
+  */
+  utils.isObject = value => {
+    return typeof(value) === 'object' && value !== null &&
+      !Array.isArray(value);
+  };
+
+  /**
+    Parse a URL for the querystring and return it as an object.
+
+    @method parseQueryString
+    @param {String} URL The URL to get the query string from.
+    @returns {Object} The parsed query string..
+  */
+  utils.parseQueryString = URL => {
+    const parts = URL.split('?');
+    // If the URL is broken and has multiple querystrings then join them
+    // together e.g. ?one=1&two=2?one=1&two=2.
+    parts.shift();
+    const querystring = parts.join('&');
+    const parsed = {};
+    if (querystring || URL.indexOf('=') > -1) {
+      // If the querystring doesn't exist then the URL must have a "=" so use
+      // the URL.
+      (querystring || URL).split('&').forEach(keyval => {
+        const pair = keyval.split('=');
+        const key = pair[0];
+        const value = pair[1] || null;
+        // Handle the case when the URL finishes with "&".
+        if (key !== '') {
+          const existing = parsed[key];
+          // If there are duplicate keys then store values as an array,
+          // otherwise create a new record.
+          if (!existing) {
+            parsed[key] = value;
+          } else if (typeof(existing) === Array) {
+            parsed[key].push(value);
+          } else {
+            parsed[key] = [existing, value];
+          }
+        }
+      });
+    }
+    return parsed;
   };
 
   /**
@@ -1548,6 +1608,7 @@ YUI.add('juju-view-utils', function(Y) {
     @param {String} providerName Name of the provider.
     @return {Object} The details for the provider.
   */
+
   utils.getCloudProviderDetails = function(providerName) {
     const providers = {
       'gce': {
@@ -1582,25 +1643,16 @@ YUI.add('juju-view-utils', function(Y) {
         },
         message: (
           <p>
-            The GCE provider uses OAauth to Authenticate. This requires that
-            you set it up and get the relevant credentials. For more
-            information see
-            &nbsp;<a className="deployment-panel__link"
-              href={'https://cloud.google.com/compute/docs/api/how-tos/' +
-                'authorization'}
-              target="_blank">
-              https://cloud.google.com/compute/docs/api/how-tos/
-              authorization
-            </a>.
-            The key information can be downloaded as a JSON file, or copied
-            from
-            &nbsp;<a className="deployment-panel__link"
-              href={'https://console.developers.google.com/project/apiui/' +
-                'credential'}
-              target="_blank">
-              https://console.developers.google.com/project/apiui/credential
-            </a>.
-          </p>)
+            Need help? Read more about <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/credentials"
+            target="_blank" title="Cloud credentials help">credentials in
+            general</a> or <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/help-google"
+            target="_blank"
+            title="Help using the Google Compute Engine public cloud">setting up
+            GCE credentials</a>.
+          </p>
+        )
       },
       'azure': {
         id: 'azure',
@@ -1624,25 +1676,15 @@ YUI.add('juju-view-utils', function(Y) {
         },
         message: (
           <p>
-            The following fields require your Windows Azure management
-            information. Having Juju installed, is really easy to&nbsp;
-            <a className="deployment-panel__link"
-              href='https://jujucharms.com/docs/2.0/help-azure#credentials'
-              target="_blank">
-              set up credentials interactively
-            </a>
-            . All required values are then available and can be displayed
-            running<br/>
-            "juju credentials --show-secrets --format yaml azure".<br/>
-            Is it also possible to&nbsp;
-            <a className="deployment-panel__link"
-              href={'https://jujucharms.com/docs/2.0/help-azure' +
-                    '#manually-adding-credentials'}
-              target="_blank">
-              manually add credentials
-            </a>
-            .
-          </p>)
+            Need help? Read more about <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/credentials"
+            target="_blank" title="Cloud credentials help">credentials in
+            general</a> or <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/help-azure" target="_blank"
+            title="Help using the Microsoft Azure public cloud">setting up
+            Azure credentials</a>.
+          </p>
+        )
       },
       'ec2': {
         id: 'aws',
@@ -1664,15 +1706,15 @@ YUI.add('juju-view-utils', function(Y) {
         },
         message: (
           <p>
-            You can obtain your AWS credentials at:<br />
-            <a className="deployment-panel__link"
-              href={'https://console.aws.amazon.com/iam/home?region=' +
-                'eu-west-1#security_credential'}
-              target="_blank">
-              https://console.aws.amazon.com/iam/home?region=eu-west-1#
-              security_credential
-            </a>
-          </p>)
+            Need help? Read more about <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/credentials"
+            target="_blank" title="Cloud credentials help">credentials in
+            general</a> or <a className="deployment-panel__link"
+            href="https://jujucharms.com/docs/stable/help-aws" target="_blank"
+            title="Help using the Amazon Web Service public cloud">setting up
+            AWS credentials</a>.
+          </p>
+        )
       },
       'openstack': {
         id: 'openstack',
@@ -1808,7 +1850,41 @@ YUI.add('juju-view-utils', function(Y) {
         title: 'Local'
       }
     };
+    // Map the cloud id to provider type.
+    switch (providerName) {
+      case 'aws':
+        providerName = 'ec2';
+        break;
+      case 'google':
+        providerName = 'gce';
+        break;
+    }
     return providers[providerName];
+  };
+
+  /**
+    Validate the form fields in a react component.
+
+    @method validateForm
+    @param {Array} fields A list of field ref names.
+    @param {Object} refs The refs for a component.
+    @returns {Boolean} Whether the form is valid.
+  */
+  utils.validateForm = function(fields, refs) {
+    let formValid = true;
+    fields.forEach(field => {
+      const ref = refs[field];
+      if (!ref || !ref.validate) {
+        return;
+      }
+      const valid = ref.validate();
+      // If there is an error then mark that. We don't want to exit the loop
+      // at this point so that each field gets validated.
+      if (!valid) {
+        formValid = false;
+      }
+    });
+    return formValid;
   };
 
 }, '0.1.0', {

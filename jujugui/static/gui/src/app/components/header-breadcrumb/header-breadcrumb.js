@@ -28,14 +28,38 @@ YUI.add('header-breadcrumb', function() {
   // available models.
   juju.components.HeaderBreadcrumb = React.createClass({
     propTypes: {
+      acl: React.PropTypes.object.isRequired,
       appState: React.PropTypes.object.isRequired,
       authDetails: React.PropTypes.object,
+      changeState: React.PropTypes.func.isRequired,
+      humanizeTimestamp: React.PropTypes.func.isRequired,
       listModelsWithInfo: React.PropTypes.func,
+      loadingModel: React.PropTypes.bool,
       modelName: React.PropTypes.string,
       modelOwner: React.PropTypes.string,
       showEnvSwitcher: React.PropTypes.bool.isRequired,
       showProfile: React.PropTypes.func.isRequired,
       switchModel: React.PropTypes.func.isRequired
+    },
+
+    getDefaultProps: function() {
+      return {
+        loadingModel: false
+      };
+    },
+
+    /**
+      Returns the classes for the button based on the provided props.
+      @method _generateClasses
+      @returns {String} The collection of class names.
+    */
+    _generateClasses: function() {
+      return classNames(
+        'header-breadcrumb',
+        {
+          'header-breadcrumb--loading-model': this.props.loadingModel
+        }
+      );
     },
 
     /**
@@ -45,19 +69,22 @@ YUI.add('header-breadcrumb', function() {
       @method _renderEnvSwitcher
     */
     _renderEnvSwitcher: function() {
-      if (this.props.showEnvSwitcher && !this.props.appState.current.profile) {
-        return (
-          <li className="header-breadcrumb__list-item">
-            <window.juju.components.EnvSwitcher
-              authDetails={this.props.authDetails}
-              environmentName={this.props.modelName}
-              listModelsWithInfo={this.props.listModelsWithInfo}
-              showProfile={this.props.showProfile}
-              switchModel={this.props.switchModel}
-            />
-          </li>);
+      const props = this.props;
+      if (!props.showEnvSwitcher || props.appState.current.profile) {
+        return null;
       }
-      return;
+      return (
+        <li className="header-breadcrumb__list-item">
+          <window.juju.components.EnvSwitcher
+            acl={this.props.acl}
+            authDetails={this.props.authDetails}
+            changeState={this.props.changeState}
+            environmentName={this.props.modelName}
+            humanizeTimestamp={this.props.humanizeTimestamp}
+            listModelsWithInfo={this.props.listModelsWithInfo}
+            switchModel={this.props.switchModel}
+          />
+        </li>);
     },
 
     /**
@@ -88,6 +115,10 @@ YUI.add('header-breadcrumb', function() {
       @method _generateOwnerLink
     */
     _generateOwnerLink: function() {
+      const currentState = this.props.appState.current;
+      if (currentState && currentState.profile) {
+        return this._buildProfile(currentState.profile);
+      }
       const modelOwner = this.props.modelOwner;
       const modelName = this.props.modelName;
       if (!modelOwner || !modelName || modelName === NO_MODEL) {
@@ -109,6 +140,7 @@ YUI.add('header-breadcrumb', function() {
       if (auth && (auth.user || auth.loading)) {
         return this._buildProfile(auth.loading ? '...' : auth.rootUserName);
       }
+      return null;
     },
 
     /**
@@ -130,15 +162,19 @@ YUI.add('header-breadcrumb', function() {
     },
 
     render: function() {
+      const props = this.props;
       const userItem = this._generateOwnerLink();
-      const authDetails = this.props.authDetails;
+      const authDetails = props.authDetails;
       return (
-        <ul className="header-breadcrumb"
-            // This attribute is required by uitests.
-            data-username={authDetails && authDetails.rootUserName}>
-          {userItem}
-          {this._renderEnvSwitcher()}
-        </ul>
+        <div className={this._generateClasses()}>
+          <div className="header-breadcrumb__loading">Loading model</div>
+          <ul className="header-breadcrumb__list"
+              // This attribute is required by uitests.
+              data-username={authDetails && authDetails.rootUserName}>
+            {userItem}
+            {this._renderEnvSwitcher()}
+          </ul>
+        </div>
       );
     }
 

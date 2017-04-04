@@ -24,7 +24,7 @@ chai.config.includeStack = true;
 chai.config.truncateThreshold = 0;
 
 describe('DeploymentCredentialAdd', function() {
-  var acl, getCloudProviderDetails;
+  let acl, sendAnalytics, getCloudProviderDetails;
 
   beforeAll(function(done) {
     // By loading this file it adds the component to the juju components.
@@ -33,6 +33,7 @@ describe('DeploymentCredentialAdd', function() {
 
   beforeEach(() => {
     acl = {isReadOnly: sinon.stub().returns(false)};
+    sendAnalytics = sinon.stub();
     getCloudProviderDetails = sinon.stub();
     getCloudProviderDetails.withArgs('gce').returns({
       id: 'google',
@@ -96,21 +97,23 @@ describe('DeploymentCredentialAdd', function() {
 
   it('can render without a cloud', function() {
     var cloud = getCloudProviderDetails('gce');
-    var close = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
       <juju.components.DeploymentCredentialAdd
           acl={acl}
+          addNotification={sinon.stub()}
           updateCloudCredential={sinon.stub()}
-          close={close}
+          close={sinon.stub()}
           cloud={null}
           getCloudProviderDetails={getCloudProviderDetails}
           generateCloudCredentialName={sinon.stub()}
           getCredentials={sinon.stub()}
+          sendAnalytics={sendAnalytics}
           setCredential={sinon.stub()}
           user="user-admin"
           validateForm={sinon.stub()} />, true);
     var instance = renderer.getMountedInstance();
     var output = renderer.getRenderOutput();
+    const buttons = output.props.children[3].props.children.props.buttons;
     var expected = (
       <div className="deployment-credential-add twelve-col">
         <h4>Create new Google Compute Engine credential</h4>
@@ -158,65 +161,67 @@ describe('DeploymentCredentialAdd', function() {
                   label: 'jsonfile',
                   value: 'jsonfile'
                 }]} />
-              {[<juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="client-id"
-                label="Client ID"
-                multiLine={undefined}
-                required={true}
-                ref="client-id"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="client-email"
-                label="Client e-mail address"
-                multiLine={undefined}
-                required={true}
-                ref="client-email"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="private-key"
-                label="Private key"
-                multiLine={true}
-                required={true}
-                ref="private-key"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="project-id"
-                label="Project ID"
-                multiLine={undefined}
-                required={false}
-                ref="project-id"
-                type={undefined}
-                validate={undefined} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="password"
-                label="Password"
-                multiLine={undefined}
-                required={false}
-                ref="password"
-                type="password"
-                validate={undefined} />]}
+              {[
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="client-id"
+                  label="Client ID"
+                  multiLine={undefined}
+                  required={true}
+                  ref="client-id"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="client-email"
+                  label="Client e-mail address"
+                  multiLine={undefined}
+                  required={true}
+                  ref="client-email"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="private-key"
+                  label="Private key"
+                  multiLine={true}
+                  required={true}
+                  ref="private-key"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="project-id"
+                  label="Project ID"
+                  multiLine={undefined}
+                  required={false}
+                  ref="project-id"
+                  type={undefined}
+                  validate={undefined} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="password"
+                  label="Password"
+                  multiLine={undefined}
+                  required={false}
+                  ref="password"
+                  type="password"
+                  validate={undefined} />
+              ]}
             </div>
             <div className="deployment-flow__notice six-col last-col">
               <p className="deployment-flow__notice-content">
@@ -224,59 +229,54 @@ describe('DeploymentCredentialAdd', function() {
                   name="general-action-blue"
                   size="16" />
                 Credentials are stored securely on our servers and we will
-                notify you by email whenever they are used. See where they are
-                used and manage or remove them via the account page.
+                notify you by email whenever they are changed or deleted.
+                You can see where they are used and manage or remove them via
+                the account page.
               </p>
             </div>
           </div>
         </form>
         <div className="prepend-six six-col last-col">
           <juju.components.ButtonRow
-            buttons={[{
-              action: close,
-              title: 'Cancel',
-              type: 'neutral'
-            }, {
-              action: instance._handleAddCredentials,
-              submit: true,
-              title: 'Add cloud credential',
-              type: 'positive'
-            }]} />
+            buttons={buttons} />
         </div>
       </div>);
     assert.deepEqual(output, expected);
   });
 
   it('can update to a new cloud', function() {
-    const close = sinon.stub();
     const renderer = jsTestUtils.shallowRender(
       <juju.components.DeploymentCredentialAdd
           acl={acl}
+          addNotification={sinon.stub()}
           updateCloudCredential={sinon.stub()}
-          close={close}
+          close={sinon.stub()}
           cloud={null}
           getCloudProviderDetails={getCloudProviderDetails}
           generateCloudCredentialName={sinon.stub()}
           getCredentials={sinon.stub()}
+          sendAnalytics={sendAnalytics}
           setCredential={sinon.stub()}
           user="user-admin"
           validateForm={sinon.stub()} />, true);
-    const instance = renderer.getMountedInstance();
     let output = renderer.getRenderOutput();
     renderer.render(
       <juju.components.DeploymentCredentialAdd
           acl={acl}
+          addNotification={sinon.stub()}
           updateCloudCredential={sinon.stub()}
           close={close}
           cloud={{name: 'aws', cloudType: 'ec2'}}
           getCloudProviderDetails={getCloudProviderDetails}
           generateCloudCredentialName={sinon.stub()}
           getCredentials={sinon.stub()}
+          sendAnalytics={sendAnalytics}
           setCredential={sinon.stub()}
           user="user-admin"
           validateForm={sinon.stub()} />);
     const cloud = getCloudProviderDetails('ec2');
     output = renderer.getRenderOutput();
+    const buttons = output.props.children[3].props.children.props.buttons;
     const expected = (
       <div className="deployment-credential-add twelve-col">
         <h4>Create new Amazon Web Services credential</h4>
@@ -314,32 +314,34 @@ describe('DeploymentCredentialAdd', function() {
             <div className="six-col">
               a message
               {undefined}
-              {[<juju.components.GenericInput
-                autocomplete={true}
-                disabled={false}
-                key="access-key"
-                label="The EC2 access key"
-                multiLine={undefined}
-                required={true}
-                ref="access-key"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={false}
-                disabled={false}
-                key="secret-key"
-                label="The EC2 secret key"
-                multiLine={undefined}
-                required={true}
-                ref="secret-key"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />]}
+              {[
+                <juju.components.GenericInput
+                  autocomplete={true}
+                  disabled={false}
+                  key="access-key"
+                  label="The EC2 access key"
+                  multiLine={undefined}
+                  required={true}
+                  ref="access-key"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={false}
+                  disabled={false}
+                  key="secret-key"
+                  label="The EC2 secret key"
+                  multiLine={undefined}
+                  required={true}
+                  ref="secret-key"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />
+              ]}
             </div>
             <div className="deployment-flow__notice six-col last-col">
               <p className="deployment-flow__notice-content">
@@ -347,24 +349,16 @@ describe('DeploymentCredentialAdd', function() {
                   name="general-action-blue"
                   size="16" />
                 Credentials are stored securely on our servers and we will
-                notify you by email whenever they are used. See where they are
-                used and manage or remove them via the account page.
+                notify you by email whenever they are changed or deleted.
+                You can see where they are used and manage or remove them via
+                the account page.
               </p>
             </div>
           </div>
         </form>
         <div className="prepend-six six-col last-col">
           <juju.components.ButtonRow
-            buttons={[{
-              action: close,
-              title: 'Cancel',
-              type: 'neutral'
-            }, {
-              action: instance._handleAddCredentials,
-              submit: true,
-              title: 'Add cloud credential',
-              type: 'positive'
-            }]} />
+            buttons={buttons} />
         </div>
       </div>);
     assert.deepEqual(output, expected);
@@ -372,21 +366,23 @@ describe('DeploymentCredentialAdd', function() {
 
   it('can render credential fields for a cloud', function() {
     var cloud = getCloudProviderDetails('gce');
-    var close = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
     <juju.components.DeploymentCredentialAdd
         acl={acl}
+        addNotification={sinon.stub()}
         updateCloudCredential={sinon.stub()}
-        close={close}
+        close={sinon.stub()}
         cloud={{name: 'google', cloudType: 'gce'}}
         getCloudProviderDetails={getCloudProviderDetails}
         generateCloudCredentialName={sinon.stub()}
         getCredentials={sinon.stub()}
+        sendAnalytics={sendAnalytics}
         setCredential={sinon.stub()}
         user="user-admin"
         validateForm={sinon.stub()} />, true);
     var instance = renderer.getMountedInstance();
     var output = renderer.getRenderOutput();
+    const buttons = output.props.children[3].props.children.props.buttons;
     var expected = (
       <div className="deployment-credential-add twelve-col">
         <h4>Create new Google Compute Engine credential</h4>
@@ -447,52 +443,53 @@ describe('DeploymentCredentialAdd', function() {
                   regex: /\S+/,
                   error: 'This field is required.'
                 }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="client-email"
-                label="Client e-mail address"
-                multiLine={undefined}
-                required={true}
-                ref="client-email"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="private-key"
-                label="Private key"
-                multiLine={true}
-                required={true}
-                ref="private-key"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="project-id"
-                label="Project ID"
-                multiLine={undefined}
-                required={false}
-                ref="project-id"
-                type={undefined}
-                validate={undefined} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={false}
-                key="password"
-                label="Password"
-                multiLine={undefined}
-                required={false}
-                ref="password"
-                type="password"
-                validate={undefined} />]}
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="client-email"
+                  label="Client e-mail address"
+                  multiLine={undefined}
+                  required={true}
+                  ref="client-email"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="private-key"
+                  label="Private key"
+                  multiLine={true}
+                  required={true}
+                  ref="private-key"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="project-id"
+                  label="Project ID"
+                  multiLine={undefined}
+                  required={false}
+                  ref="project-id"
+                  type={undefined}
+                  validate={undefined} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={false}
+                  key="password"
+                  label="Password"
+                  multiLine={undefined}
+                  required={false}
+                  ref="password"
+                  type="password"
+                  validate={undefined} />
+              ]}
             </div>
             <div className="deployment-flow__notice six-col last-col">
               <p className="deployment-flow__notice-content">
@@ -500,24 +497,16 @@ describe('DeploymentCredentialAdd', function() {
                   name="general-action-blue"
                   size="16" />
                 Credentials are stored securely on our servers and we will
-                notify you by email whenever they are used. See where they are
-                used and manage or remove them via the account page.
+                notify you by email whenever they are changed or deleted.
+                You can see where they are used and manage or remove them via
+                the account page.
               </p>
             </div>
           </div>
         </form>
         <div className="prepend-six six-col last-col">
           <juju.components.ButtonRow
-            buttons={[{
-              action: close,
-              title: 'Cancel',
-              type: 'neutral'
-            }, {
-              action: instance._handleAddCredentials,
-              submit: true,
-              title: 'Add cloud credential',
-              type: 'positive'
-            }]} />
+            buttons={buttons} />
         </div>
       </div>);
     assert.deepEqual(output, expected);
@@ -525,22 +514,24 @@ describe('DeploymentCredentialAdd', function() {
 
   it('can render a cloud with a json field', function() {
     var cloud = getCloudProviderDetails('gce');
-    var close = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
     <juju.components.DeploymentCredentialAdd
         acl={acl}
+        addNotification={sinon.stub()}
         updateCloudCredential={sinon.stub()}
-        close={close}
+        close={sinon.stub()}
         cloud={{name: 'google', cloudType: 'gce'}}
         getCloudProviderDetails={getCloudProviderDetails}
         generateCloudCredentialName={sinon.stub()}
         getCredentials={sinon.stub()}
+        sendAnalytics={sendAnalytics}
         setCredential={sinon.stub()}
         user="user-admin"
         validateForm={sinon.stub()} />, true);
     var instance = renderer.getMountedInstance();
     instance.setState({authType: 'jsonfile'});
     var output = renderer.getRenderOutput();
+    const buttons = output.props.children[3].props.children.props.buttons;
     var expected = (
       <div className="deployment-credential-add twelve-col">
         <h4>Create new Google Compute Engine credential</h4>
@@ -606,24 +597,16 @@ describe('DeploymentCredentialAdd', function() {
                   name="general-action-blue"
                   size="16" />
                 Credentials are stored securely on our servers and we will
-                notify you by email whenever they are used. See where they are
-                used and manage or remove them via the account page.
+                notify you by email whenever they are changed or deleted.
+                You can see where they are used and manage or remove them via
+                the account page.
               </p>
             </div>
           </div>
         </form>
         <div className="prepend-six six-col last-col">
           <juju.components.ButtonRow
-            buttons={[{
-              action: close,
-              title: 'Cancel',
-              type: 'neutral'
-            }, {
-              action: instance._handleAddCredentials,
-              submit: true,
-              title: 'Add cloud credential',
-              type: 'positive'
-            }]} />
+            buttons={buttons} />
         </div>
       </div>);
     assert.deepEqual(output, expected);
@@ -632,21 +615,23 @@ describe('DeploymentCredentialAdd', function() {
   it('can disable controls when read only', function() {
     acl.isReadOnly = sinon.stub().returns(true);
     var cloud = getCloudProviderDetails('gce');
-    var close = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
     <juju.components.DeploymentCredentialAdd
         acl={acl}
+        addNotification={sinon.stub()}
         updateCloudCredential={sinon.stub()}
-        close={close}
+        close={sinon.stub()}
         cloud={{name: 'google', cloudType: 'gce'}}
         getCloudProviderDetails={getCloudProviderDetails}
         generateCloudCredentialName={sinon.stub()}
         getCredentials={sinon.stub()}
+        sendAnalytics={sendAnalytics}
         setCredential={sinon.stub()}
         user="user-admin"
         validateForm={sinon.stub()} />, true);
     var instance = renderer.getMountedInstance();
     var output = renderer.getRenderOutput();
+    const buttons = output.props.children[3].props.children.props.buttons;
     var expected = (
       <div className="deployment-credential-add twelve-col">
         <h4>Create new Google Compute Engine credential</h4>
@@ -694,65 +679,67 @@ describe('DeploymentCredentialAdd', function() {
                   label: 'jsonfile',
                   value: 'jsonfile'
                 }]} />
-              {[<juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={true}
-                key="client-id"
-                label="Client ID"
-                multiLine={undefined}
-                required={true}
-                ref="client-id"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={true}
-                key="client-email"
-                label="Client e-mail address"
-                multiLine={undefined}
-                required={true}
-                ref="client-email"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={true}
-                key="private-key"
-                label="Private key"
-                multiLine={true}
-                required={true}
-                ref="private-key"
-                type={undefined}
-                validate={[{
-                  regex: /\S+/,
-                  error: 'This field is required.'
-                }]} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={true}
-                key="project-id"
-                label="Project ID"
-                multiLine={undefined}
-                required={false}
-                ref="project-id"
-                type={undefined}
-                validate={undefined} />,
-              <juju.components.GenericInput
-                autocomplete={undefined}
-                disabled={true}
-                key="password"
-                label="Password"
-                multiLine={undefined}
-                required={false}
-                ref="password"
-                type="password"
-                validate={undefined} />]}
+              {[
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={true}
+                  key="client-id"
+                  label="Client ID"
+                  multiLine={undefined}
+                  required={true}
+                  ref="client-id"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={true}
+                  key="client-email"
+                  label="Client e-mail address"
+                  multiLine={undefined}
+                  required={true}
+                  ref="client-email"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={true}
+                  key="private-key"
+                  label="Private key"
+                  multiLine={true}
+                  required={true}
+                  ref="private-key"
+                  type={undefined}
+                  validate={[{
+                    regex: /\S+/,
+                    error: 'This field is required.'
+                  }]} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={true}
+                  key="project-id"
+                  label="Project ID"
+                  multiLine={undefined}
+                  required={false}
+                  ref="project-id"
+                  type={undefined}
+                  validate={undefined} />,
+                <juju.components.GenericInput
+                  autocomplete={undefined}
+                  disabled={true}
+                  key="password"
+                  label="Password"
+                  multiLine={undefined}
+                  required={false}
+                  ref="password"
+                  type="password"
+                  validate={undefined} />
+              ]}
             </div>
             <div className="deployment-flow__notice six-col last-col">
               <p className="deployment-flow__notice-content">
@@ -760,24 +747,16 @@ describe('DeploymentCredentialAdd', function() {
                   name="general-action-blue"
                   size="16" />
                 Credentials are stored securely on our servers and we will
-                notify you by email whenever they are used. See where they are
-                used and manage or remove them via the account page.
+                notify you by email whenever they are changed or deleted.
+                You can see where they are used and manage or remove them via
+                the account page.
               </p>
             </div>
           </div>
         </form>
         <div className="prepend-six six-col last-col">
           <juju.components.ButtonRow
-            buttons={[{
-              action: close,
-              title: 'Cancel',
-              type: 'neutral'
-            }, {
-              action: instance._handleAddCredentials,
-              submit: true,
-              title: 'Add cloud credential',
-              type: 'positive'
-            }]} />
+            buttons={buttons} />
         </div>
       </div>);
     assert.deepEqual(output, expected);
@@ -789,12 +768,14 @@ describe('DeploymentCredentialAdd', function() {
     var renderer = jsTestUtils.shallowRender(
       <juju.components.DeploymentCredentialAdd
           acl={acl}
+          addNotification={sinon.stub()}
           updateCloudCredential={updateCloudCredential}
           close={sinon.stub()}
           cloud={{name: 'google', cloudType: 'gce'}}
           getCloudProviderDetails={getCloudProviderDetails}
           generateCloudCredentialName={sinon.stub().returns('new@test')}
           getCredentials={getCredentials}
+          sendAnalytics={sendAnalytics}
           setCredential={sinon.stub()}
           user="user-admin"
           validateForm={sinon.stub().returns(true)} />, true);
@@ -824,6 +805,10 @@ describe('DeploymentCredentialAdd', function() {
       }
     };
     instance._handleAddCredentials();
+    assert.equal(sendAnalytics.callCount, 1);
+    assert.equal(sendAnalytics.args[0][0], 'Deployment Flow');
+    assert.equal(sendAnalytics.args[0][1], 'Button click');
+    assert.equal(sendAnalytics.args[0][2], 'Add credentials');
     assert.equal(updateCloudCredential.callCount, 1);
     const args = updateCloudCredential.args[0];
     assert.equal(args[0], 'new@test');
@@ -844,12 +829,14 @@ describe('DeploymentCredentialAdd', function() {
     const renderer = jsTestUtils.shallowRender(
     <juju.components.DeploymentCredentialAdd
         acl={acl}
+        addNotification={sinon.stub()}
         updateCloudCredential={updateCloudCredential}
         close={sinon.stub()}
         cloud={{name: 'google', cloudType: 'gce'}}
         getCloudProviderDetails={getCloudProviderDetails}
         generateCloudCredentialName={sinon.stub()}
         getCredentials={sinon.stub()}
+        sendAnalytics={sendAnalytics}
         setCredential={sinon.stub()}
         user="user-admin"
         validateForm={sinon.stub().returns(true)} />, true);
@@ -891,17 +878,71 @@ describe('DeploymentCredentialAdd', function() {
     var renderer = jsTestUtils.shallowRender(
       <juju.components.DeploymentCredentialAdd
           acl={acl}
+          addNotification={sinon.stub()}
           updateCloudCredential={updateCloudCredential}
           close={sinon.stub()}
           cloud={{name: 'google', cloudType: 'gce'}}
           getCloudProviderDetails={getCloudProviderDetails}
           generateCloudCredentialName={sinon.stub()}
           getCredentials={sinon.stub()}
+          sendAnalytics={sendAnalytics}
           setCredential={sinon.stub()}
           user="user-admin"
           validateForm={sinon.stub().returns(false)} />, true);
     var instance = renderer.getMountedInstance();
     instance._handleAddCredentials();
     assert.equal(updateCloudCredential.callCount, 0);
+  });
+
+  it('displays a notification when updating a credential errors', function() {
+    const error = 'Bad wolf';
+    const updateCloudCredential = sinon.stub().callsArgWith(3, error);
+    const addNotification = sinon.stub();
+    var renderer = jsTestUtils.shallowRender(
+      <juju.components.DeploymentCredentialAdd
+          acl={acl}
+          addNotification={addNotification}
+          updateCloudCredential={updateCloudCredential}
+          close={sinon.stub()}
+          cloud={{name: 'google', cloudType: 'gce'}}
+          getCloudProviderDetails={getCloudProviderDetails}
+          generateCloudCredentialName={sinon.stub().returns('new@test')}
+          getCredentials={sinon.stub()}
+          sendAnalytics={sendAnalytics}
+          setCredential={sinon.stub()}
+          user="user-admin"
+          validateForm={sinon.stub().returns(true)} />, true);
+    var instance = renderer.getMountedInstance();
+    instance.refs = {
+      'credentialName': {
+        validate: sinon.stub().returns(true),
+        getValue: sinon.stub().returns('new@test')
+      },
+      'client-id': {
+        validate: sinon.stub().returns(true),
+        getValue: sinon.stub().returns('client id')
+      },
+      'client-email': {
+        validate: sinon.stub().returns(true),
+        getValue: sinon.stub().returns('client email')
+      },
+      'private-key': {
+        validate: sinon.stub().returns(true),
+        getValue: sinon.stub().returns('private key')
+      },
+      'project-id': {
+        getValue: sinon.stub().returns('project id')
+      },
+      'password': {
+        getValue: sinon.stub().returns('password')
+      }
+    };
+    instance._handleAddCredentials();
+    assert.isTrue(addNotification.called, 'addNotification was not called');
+    assert.deepEqual(addNotification.args[0][0], {
+      title: 'Could not add credential',
+      message: `Could not add the credential: ${error}`,
+      level: 'error'
+    }, 'Notification message does not match expected');
   });
 });

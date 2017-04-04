@@ -25,13 +25,15 @@ YUI.add('machine-view', function() {
       acl: React.PropTypes.object.isRequired,
       addGhostAndEcsUnits: React.PropTypes.func.isRequired,
       autoPlaceUnits: React.PropTypes.func.isRequired,
+      changeState: React.PropTypes.func.isRequired,
       createMachine: React.PropTypes.func.isRequired,
       destroyMachines: React.PropTypes.func.isRequired,
       environmentName: React.PropTypes.string.isRequired,
-      jujuCoreVersion: React.PropTypes.string.isRequired,
       machines: React.PropTypes.object.isRequired,
       placeUnit: React.PropTypes.func.isRequired,
+      providerType: React.PropTypes.string,
       removeUnits: React.PropTypes.func.isRequired,
+      series: React.PropTypes.array,
       services: React.PropTypes.object.isRequired,
       units: React.PropTypes.object.isRequired
     },
@@ -125,15 +127,25 @@ YUI.add('machine-view', function() {
     },
 
     /**
+      Handle opening the store.
+
+      @method _openStore
+    */
+    _openStore: function() {
+      this.props.changeState({store: ''});
+    },
+
+    /**
       Display a list of unplaced units or onboarding.
 
       @method _generateUnplacedUnits
       @returns {Object} A unit list or onboarding.
     */
     _generateUnplacedUnits: function() {
-      var units = this.props.units.filterByMachine();
+      const props = this.props;
+      let units = props.units.filterByMachine();
       units = units.filter((unit) => {
-        var service = this.props.services.getById(unit.service);
+        const service = props.services.getById(unit.service);
         if (!service.get('subordinate')) {
           return unit;
         }
@@ -141,9 +153,14 @@ YUI.add('machine-view', function() {
       if (units.length === 0) {
         var icon;
         var content;
-        if (this.props.services.size() === 0) {
+        if (props.services.size() === 0) {
           icon = 'add_16';
-          content = 'Add applications to get started';
+          content = (
+            <span className="link"
+              onClick={this._openStore}>
+              Add applications to get started
+            </span>
+        );
         } else {
           icon = 'task-done_16';
           content = 'You have placed all of your units';
@@ -155,35 +172,39 @@ YUI.add('machine-view', function() {
             {content}
           </div>);
       }
-      var components = [];
-      var state = this.state;
-      var placingUnit;
+      const components = [];
+      const state = this.state;
+      let placingUnit;
       if (state.showAddMachine || state.showAddContainer) {
         placingUnit = state.placingUnit;
       }
       units.forEach((unit) => {
-        var service = this.props.services.getById(unit.service);
+        const service = props.services.getById(unit.service);
         if (placingUnit && unit.id === placingUnit.id) {
           return;
         }
         components.push(
           <juju.components.MachineViewUnplacedUnit
-            acl={this.props.acl}
-            createMachine={this.props.createMachine}
+            acl={props.acl}
+            createMachine={props.createMachine}
             icon={service.get('icon') || ''}
             key={unit.id}
-            machines={this.props.machines}
-            placeUnit={this.props.placeUnit}
+            machines={props.machines}
+            placeUnit={props.placeUnit}
+            providerType={props.providerType}
             removeUnit={this._removeUnit}
             selectMachine={this.selectMachine}
-            unit={unit} />);
+            series={props.series}
+            unit={unit}
+          />
+        );
       });
       return (
         <div>
           <div className="machine-view__auto-place">
             <juju.components.GenericButton
-              action={this.props.autoPlaceUnits}
-              disabled={this.props.acl.isReadOnly()}
+              action={props.autoPlaceUnits}
+              disabled={props.acl.isReadOnly()}
               type="inline-neutral"
               title="Auto place" />
             or manually place
@@ -191,7 +212,8 @@ YUI.add('machine-view', function() {
           <ul className="machine-view__list">
             {components}
           </ul>
-        </div>);
+        </div>
+      );
     },
 
     /**
@@ -360,18 +382,22 @@ YUI.add('machine-view', function() {
       @method _generateAddMachine
     */
     _generateAddMachine: function() {
-      var showAddMachine = this.state.showAddMachine;
-      if (!showAddMachine) {
+      if (!this.state.showAddMachine) {
         return;
       }
+      const props = this.props;
       return (
         <juju.components.MachineViewAddMachine
-          acl={this.props.acl}
+          acl={props.acl}
           close={this._closeAddMachine}
-          createMachine={this.props.createMachine}
-          placeUnit={this.props.placeUnit}
+          createMachine={props.createMachine}
+          placeUnit={props.placeUnit}
+          providerType={props.providerType}
           selectMachine={this.selectMachine}
-          unit={this.state.placingUnit} />);
+          series={props.series}
+          unit={this.state.placingUnit}
+        />
+      );
     },
 
     /**
@@ -409,19 +435,22 @@ YUI.add('machine-view', function() {
       @method _generateAddContainer
     */
     _generateAddContainer: function() {
-      var showAddContainer = this.state.showAddContainer;
-      if (!showAddContainer) {
+      if (!this.state.showAddContainer) {
         return;
       }
+      const props = this.props;
       return (
         <juju.components.MachineViewAddMachine
-          acl={this.props.acl}
+          acl={props.acl}
           close={this._closeAddContainer}
-          createMachine={this.props.createMachine}
-          jujuCoreVersion={this.props.jujuCoreVersion}
+          createMachine={props.createMachine}
           parentId={this.state.selectedMachine}
-          placeUnit={this.props.placeUnit}
-          unit={this.state.placingUnit} />);
+          placeUnit={props.placeUnit}
+          providerType={props.providerType}
+          series={props.series}
+          unit={this.state.placingUnit}
+        />
+      );
     },
 
     /**

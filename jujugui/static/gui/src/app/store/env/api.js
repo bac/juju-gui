@@ -234,6 +234,13 @@ YUI.add('juju-env-api', function(Y) {
       // reason this can't be set to null as then it displays the name as null
       // instead of picking up that the name has not been set.
       this.setConnectedAttr('environmentName', undefined);
+      // The 'loading' flag signifies if a model is fully loaded or not. Fully
+      // loaded means that the connection is established, authentication is
+      // finished, and the model is ready for API calls. It differs from the
+      // loading/loaded and isUserAuthenticated flags because it is larger in
+      // scope than either of those. Parts of the UI hide/display based on this
+      // flag; for example, we don't show the sharing button while it's false.
+      this.loading = false;
     },
 
     /**
@@ -514,15 +521,20 @@ YUI.add('juju-env-api', function(Y) {
         this.setConnectedAttr('facades', facades);
         var userInfo = response['user-info'];
         this.setConnectedAttr('modelAccess', userInfo['model-access']);
-        this.setConnectedAttr(
-          'controllerAccess', userInfo['controller-access']);
+        let controllerAccess = userInfo['controller-access'];
+        // This permission's name changed between versions of Juju 2.
+        // The most recent incarnation is "add-model".
+        if (controllerAccess === 'addmodel') {
+          controllerAccess = 'add-model';
+        }
+        this.setConnectedAttr('controllerAccess', controllerAccess);
         if (response['controller-tag']) {
           this.setConnectedAttr(
             'controllerId',
             tags.parse(tags.CONTROLLER, response['controller-tag']));
         }
         this.setConnectedAttr(
-          'modelId',  tags.parse(tags.MODEL, response['model-tag']));
+          'modelId', tags.parse(tags.MODEL, response['model-tag']));
         this.currentModelInfo(this._handleCurrentModelInfo.bind(this));
         this._watchAll();
         // Start pinging the server.
@@ -540,7 +552,7 @@ YUI.add('juju-env-api', function(Y) {
         // model then do not reset credentials or the failed authentication
         // flags yet.
         // If the credentials were rejected remove them.
-        this.setCredentials(null);
+        this.get('user').controller = null;
         this.failedAuthentication = true;
       }
       // Only fire login if this is not a redirect error as we will come back
@@ -593,7 +605,7 @@ YUI.add('juju-env-api', function(Y) {
       if (this.pendingLoginResponse) {
         return;
       }
-      var credentials = this.getCredentials();
+      const credentials = this.get('user').controller;
       if (!credentials.user || !credentials.password) {
         this.fire('login', {err: 'invalid username or password'});
         return;
@@ -675,10 +687,10 @@ YUI.add('juju-env-api', function(Y) {
           cback('authentication failed: use a proper Juju 2 release');
           return;
         }
-        this.setCredentials({
+        this.get('user').controller = {
           macaroons: macaroons,
           user: tags.parse(tags.USER, userTag)
-        });
+        };
         cback(null, response);
       };
 
@@ -697,7 +709,7 @@ YUI.add('juju-env-api', function(Y) {
       }.bind(this);
 
       // Perform the API call.
-      var macaroons = this.getCredentials().macaroons;
+      var macaroons = this.get('user').controller.macaroons;
       sendLoginRequest(
         macaroons,
         handleResponse.bind(this, bakery, macaroons, cback)
@@ -933,7 +945,7 @@ YUI.add('juju-env-api', function(Y) {
         this.fire('login', {err: 'cannot upload files anonymously'});
         return;
       }
-      var credentials = this.getCredentials();
+      var credentials = this.get('user').controller;
       var path = _getCharmAPIPath(this.get('modelUUID'), 'series=' + series);
       var headers = {'Content-Type': 'application/zip'};
       // Use a web handler to communicate to the Juju HTTPS API. The web
@@ -963,7 +975,7 @@ YUI.add('juju-env-api', function(Y) {
         credentials.
     */
     getLocalCharmFileUrl: function(charmUrl, filename) {
-      const credentials = this.getCredentials();
+      const credentials = this.get('user').controller;
       const path = _getCharmAPIPath(
           this.get('modelUUID'), 'url=' + charmUrl + '&file=' + filename);
       const webHandler = this.get('webHandler');
@@ -983,7 +995,7 @@ YUI.add('juju-env-api', function(Y) {
       @return {String} The full URL to the icon, including auth credentials.
     */
     getLocalCharmIcon: function(charmUrl) {
-      const credentials = this.getCredentials();
+      const credentials = this.get('user').controller;
       const uuid = this.get('modelUUID');
       const path = _getCharmAPIPath(uuid, 'url=' + charmUrl + '&icon=1');
       const webHandler = this.get('webHandler');
@@ -1002,7 +1014,7 @@ YUI.add('juju-env-api', function(Y) {
         response is returned.
     */
     _jujuHttpGet: function(path, progress, callback) {
-      var credentials = this.getCredentials();
+      var credentials = this.get('user').controller;
       var webHandler = this.get('webHandler');
       var headers = Object.create(null);
       // TODO frankban: allow macaroons based auth here.
@@ -1650,7 +1662,7 @@ YUI.add('juju-env-api', function(Y) {
       if (args.constraints) {
         params.constraints = this.prepareConstraints(args.constraints);
       }
-      if (args.minUnits)  {
+      if (args.minUnits) {
         params['min-units'] = args.minUnits;
       }
 
@@ -2600,7 +2612,7 @@ YUI.add('juju-env-api', function(Y) {
       // XXX frankban 2015/12/15: this will be done automatically by the
       // server, and the URL will be returned as part of the API response.
       if (!url) {
-        var user = this.getCredentials().user;
+        var user = this.get('user').controller.user;
         var envName = this.get('environmentName');
         url = 'local:/u/' + user + '/' + envName + '/' + applicationName;
       }

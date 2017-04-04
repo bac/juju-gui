@@ -27,13 +27,19 @@ describe('LoginComponent', function() {
     YUI().use('login-component', function() { done(); });
   });
 
+  afterEach(function() {
+    // Clear any timeouts created when rendering the component.
+    let id = window.setTimeout(function() {}, 0);
+    while (id--) {
+      window.clearTimeout(id);
+    }
+  });
+
   it('renders', function() {
     const loginToControllerStub = sinon.stub();
     const controllerIsConnected = sinon.stub();
     const sendPost = sinon.stub();
     const getDischargeToken = sinon.stub();
-    const showSpinner = sinon.stub();
-    const hideSpinner = sinon.stub();
     const charmstore = sinon.stub();
     const storeUser = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
@@ -42,12 +48,9 @@ describe('LoginComponent', function() {
         controllerIsConnected={controllerIsConnected}
         getDischargeToken={getDischargeToken}
         gisf={false}
-        hideSpinner={hideSpinner}
-        isLegacyJuju={false}
         loginToAPIs={sinon.stub()}
         loginToController={loginToControllerStub}
         sendPost={sendPost}
-        showSpinner={showSpinner}
       storeUser={storeUser} />, true);
     var instance = renderer.getMountedInstance();
     var output = renderer.getRenderOutput();
@@ -85,10 +88,9 @@ describe('LoginComponent', function() {
             </label>
             <juju.components.GenericButton
               submit={true}
-              title={"Login"}
-              type={"positive"} />
+              title={'Login'}
+              type={'positive'} />
             <juju.components.USSOLoginLink
-              callback={hideSpinner}
               charmstore={charmstore}
               displayType="button"
               getDischargeToken={getDischargeToken}
@@ -120,8 +122,6 @@ describe('LoginComponent', function() {
     const controllerIsConnected = sinon.stub();
     const sendPost = sinon.stub();
     const getDischargeToken = sinon.stub();
-    const showSpinner = sinon.stub();
-    const hideSpinner = sinon.stub();
     const charmstore = sinon.stub();
     const storeUser = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
@@ -130,12 +130,9 @@ describe('LoginComponent', function() {
         controllerIsConnected={controllerIsConnected}
         getDischargeToken={getDischargeToken}
         gisf={true}
-        hideSpinner={hideSpinner}
-        isLegacyJuju={false}
         loginToAPIs={sinon.stub()}
         loginToController={loginToControllerStub}
         sendPost={sendPost}
-        showSpinner={showSpinner}
         storeUser={storeUser}/>, true);
     var instance = renderer.getMountedInstance();
     var output = renderer.getRenderOutput();
@@ -173,11 +170,10 @@ describe('LoginComponent', function() {
             </label>
             <juju.components.GenericButton
               submit={true}
-              title={"Login"}
-              type={"positive"} />
+              title={'Login'}
+              type={'positive'} />
             <juju.components.USSOLoginLink
               charmstore={charmstore}
-              callback={hideSpinner}
               displayType="button"
               getDischargeToken={getDischargeToken}
               gisf={true}
@@ -203,74 +199,10 @@ describe('LoginComponent', function() {
     assert.deepEqual(output, expected);
   });
 
-  it('renders for legacy Juju', function() {
-    var renderer = jsTestUtils.shallowRender(
-      <juju.components.Login
-        isLegacyJuju={true}
-        loginToAPIs={sinon.stub()}
-        loginToController={sinon.stub()}/>, true);
-    var instance = renderer.getMountedInstance();
-    var output = renderer.getRenderOutput();
-    var expected = (
-      <div className="login">
-        <div className="login__logo">
-          <juju.components.SvgIcon width="75" height="30" name="juju-logo" />
-        </div>
-        <div className="login__full-form">
-          <div className="login__env-name">
-            Login
-          </div>
-          {undefined}
-          <form
-            className="login__form"
-            ref="form"
-            onSubmit={instance._handleLoginSubmit}>
-            <label
-              className="login__label">
-              Username
-              <input
-                className="login__input"
-                type="text"
-                name="username"
-                ref="username" />
-            </label>
-            <label
-              className="login__label">
-              Password
-              <input
-                className="login__input"
-                type="password"
-                name="password"
-                ref="password" />
-            </label>
-            <juju.components.GenericButton
-              submit={true}
-              title={"Login"}
-              type={"positive"} />
-            {undefined}
-          </form>
-        </div>
-        <div className="login__message">
-          <p>
-            Find your password with<br />
-            <code>juju api-info --password password</code>
-          </p>
-          <div className="login__message-link">
-            <a href="https://jujucharms.com" target="_blank">
-              jujucharms.com
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-    assert.deepEqual(output, expected);
-  });
-
   it('can display a login error message', function() {
     var output = jsTestUtils.shallowRender(
       <juju.components.Login
         errorMessage='bad wolf'
-        isLegacyJuju={false}
         loginToAPIs={sinon.stub()}/>);
     var expected = <div className="login__failure-message">bad wolf</div>;
     assert.deepEqual(output.props.children[1].props.children[1], expected);
@@ -280,7 +212,6 @@ describe('LoginComponent', function() {
     var loginToAPIs = sinon.stub();
     var component = testUtils.renderIntoDocument(
       <juju.components.Login
-        isLegacyJuju={false}
         loginToAPIs={loginToAPIs}/>);
     component.refs.username.value = 'foo';
     component.refs.password.value = 'bar';
@@ -298,8 +229,6 @@ describe('LoginComponent', function() {
     const loginToController = sinon.stub().callsArg(0);
     const controllerIsConnected = sinon.stub().returns(true);
     const sendPost = sinon.stub();
-    const showSpinner = sinon.stub();
-    const hideSpinner = sinon.stub();
     const getDischargeToken = sinon.stub().returns('foo');
     const charmstore = sinon.stub();
     charmstore.bakery = sinon.stub();
@@ -311,35 +240,25 @@ describe('LoginComponent', function() {
         controllerIsConnected={controllerIsConnected}
         getDischargeToken={getDischargeToken}
         gisf={true}
-        hideSpinner={hideSpinner}
-        isLegacyJuju={false}
         loginToAPIs={sinon.stub()}
         loginToController={loginToController}
         sendPost={sendPost}
-        showSpinner={showSpinner}
         storeUser={storeUser} />);
     assert.equal(
       loginToController.callCount, 1, 'loginToController not called');
-    assert.equal(showSpinner.callCount, 1, 'spinner not shown');
-    assert.equal(hideSpinner.callCount, 1, 'spinner not stopped');
   });
 
   it('eventually fails auto login if controller does not connect', function() {
     var loginToController = sinon.stub();
     var controllerIsConnected = sinon.stub().returns(false);
     var sendPost = sinon.stub();
-    const showSpinner = sinon.stub();
-    const hideSpinner = sinon.stub();
     testUtils.renderIntoDocument(
       <juju.components.Login
         controllerIsConnected={controllerIsConnected}
         gisf={true}
-        hideSpinner={hideSpinner}
-        isLegacyJuju={false}
         loginToAPIs={sinon.stub()}
         loginToController={loginToController}
-        sendPost={sendPost}
-        showSpinner={showSpinner} />);
+        sendPost={sendPost} />);
     assert.equal(
       loginToController.callCount, 0, 'loginToController not called');
   });
@@ -348,7 +267,6 @@ describe('LoginComponent', function() {
     var focus = sinon.stub();
     var renderer = jsTestUtils.shallowRender(
       <juju.components.Login
-        isLegacyJuju={false}
         loginToAPIs={sinon.stub()}/>, true);
     var instance = renderer.getMountedInstance();
     instance.refs = {username: {focus: focus}};

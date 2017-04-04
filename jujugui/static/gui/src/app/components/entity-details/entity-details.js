@@ -30,7 +30,6 @@ YUI.add('entity-details', function() {
       apiUrl: React.PropTypes.string.isRequired,
       changeState: React.PropTypes.func.isRequired,
       deployService: React.PropTypes.func.isRequired,
-      displayPlans: React.PropTypes.bool.isRequired,
       getBundleYAML: React.PropTypes.func.isRequired,
       getDiagramURL: React.PropTypes.func.isRequired,
       getEntity: React.PropTypes.func.isRequired,
@@ -38,12 +37,12 @@ YUI.add('entity-details', function() {
       getModelName: React.PropTypes.func.isRequired,
       id: React.PropTypes.string.isRequired,
       importBundleYAML: React.PropTypes.func.isRequired,
-      isLegacyJuju: React.PropTypes.bool,
       listPlansForCharm: React.PropTypes.func.isRequired,
       makeEntityModel: React.PropTypes.func.isRequired,
       pluralize: React.PropTypes.func.isRequired,
       renderMarkdown: React.PropTypes.func.isRequired,
-      scrollPosition: React.PropTypes.number.isRequired
+      scrollPosition: React.PropTypes.number.isRequired,
+      setPageTitle: React.PropTypes.func.isRequired
     },
 
     /**
@@ -98,7 +97,6 @@ YUI.add('entity-details', function() {
                   changeState={this.props.changeState}
                   getFile={this.props.getFile}
                   hasPlans={this.state.hasPlans}
-                  isLegacyJuju={this.props.isLegacyJuju}
                   renderMarkdown={this.props.renderMarkdown}
                   entityModel={entityModel}
                   plans={this.state.plans}
@@ -149,12 +147,17 @@ YUI.add('entity-details', function() {
         return;
       }
       if (data.length > 0) {
-        var data = data[0];
-        var model = this.props.makeEntityModel(data);
+        data = data[0];
+        const model = this.props.makeEntityModel(data);
         this.setState({entityModel: model}, () => {
           this._changeActiveComponent('entity-details');
           this._getPlans();
         });
+        const modelEntity = model.toEntity();
+        const displayName = modelEntity.displayName;
+        const revision_id = modelEntity.revision_id;
+        const title = `${displayName} (#${revision_id})`;
+        this.props.setPageTitle(title);
       }
     },
 
@@ -165,8 +168,7 @@ YUI.add('entity-details', function() {
     */
     _getPlans: function() {
       var entityModel = this.state.entityModel;
-      if (this.props.displayPlans &&
-        entityModel.get('entityType') === 'charm') {
+      if (entityModel.get('entityType') === 'charm') {
         if (entityModel.hasMetrics()) {
           this.setState({hasPlans: true}, () => {
             this.props.listPlansForCharm(
@@ -213,6 +215,7 @@ YUI.add('entity-details', function() {
       if (this.detailsXhr) {
         this.detailsXhr.abort();
       }
+      this.props.setPageTitle();
     },
 
     /**

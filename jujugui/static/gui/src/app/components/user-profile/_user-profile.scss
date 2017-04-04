@@ -1,10 +1,5 @@
 .user-profile {
 
-  &__create-new {
-    font-size: $base;
-    margin-top: 40px;
-  }
-
   &__close {
     position: fixed;
     z-index: 1;
@@ -40,7 +35,7 @@
     &-text {
       max-width: 360px;
       margin: 0 auto;
-      color: $warm-grey;
+      color: $dark-warm-grey;
     }
   }
 
@@ -57,25 +52,34 @@
     &-row,
     &-header {
       margin: 0;
-      padding: 15px 0 15px 15px;
+      padding: 15px 0 15px 0;
     }
 
     &-header {
       border-bottom: 1px solid $mid-grey;
+      // These side paddings are in addition to the top and bottom specified
+      // above. The header needs the side paddings while the rows do not, as
+      // the expanding divs inside the rows handle side paddings.
+      padding-left: 20px;
+      padding-right: 20px;
     }
 
     &-row {
       border-bottom: 1px dotted $mid-grey;
 
+      &:last-child {
+        border-bottom: none;
+      }
+
       &-title {
         font-size: 23px;
         margin-bottom: 40px;
       }
-      
+
       &-text {
         max-width: 360px;
         margin: 0 auto;
-        color: $warm-grey;
+        color: $dark-warm-grey;
       }
 
       .user-profile__create-new {
@@ -95,7 +99,7 @@
 
     &-tags {
       @extend %list-style;
-      color: $warm-grey;
+      color: $dark-warm-grey;
       font-size: 14px;
     }
 
@@ -119,5 +123,9 @@
     &:last-child:after {
       content: '';
     }
+  }
+
+  .expanding-row__initial {
+    padding: 0 20px;
   }
 }

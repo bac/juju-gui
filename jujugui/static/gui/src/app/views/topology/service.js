@@ -306,13 +306,13 @@ YUI.add('juju-topology-service', function(Y) {
           return 'font-size:' + d.h *
               (name_size / service_height) + 'px';
         },
-        'x': function(d) { return d.w / 2; },
-        'y': function(d) {
-          // Number derived from service assets:
-          // padding-top 26px when asset is 224px.
-          return d.h * (name_padding / service_height) + d.h *
-              (name_size / service_height) / 2;
-        }
+          'x': function(d) { return d.w / 2; },
+          'y': function(d) {
+            // Number derived from service assets:
+            // padding-top 26px when asset is 224px.
+            return d.h * (name_padding / service_height) + d.h *
+                (name_size / service_height) / 2;
+          }
         });
 
     node.select('.name').text(
@@ -1050,7 +1050,7 @@ YUI.add('juju-topology-service', function(Y) {
       if (dragData.dataType === 'token-drag-and-drop') {
         // The entiy (charm or bundle) data was JSON encoded because the
         // dataTransfer mechanism only allows for string values.
-        var entityData = Y.JSON.parse(dragData.data);
+        var entityData = JSON.parse(dragData.data);
         if (utils.determineEntityDataType(entityData) === 'charm') {
           // Add the icon url to the ghost attributes for the ghost icon
           ghostAttributes.icon = dragData.iconSrc;
@@ -1095,7 +1095,9 @@ YUI.add('juju-topology-service', function(Y) {
         gui: {
           machines: null,
           inspector: null
-        }
+        },
+        search: null,
+        store: null
       });
     },
 
@@ -1185,7 +1187,7 @@ YUI.add('juju-topology-service', function(Y) {
       }, 100);
     },
 
-    dragend: function(box,  self) {
+    dragend: function(box, self) {
       var topo = self.get('component');
       if (box.tapped) {
         box.tapped = false;
@@ -1355,8 +1357,8 @@ YUI.add('juju-topology-service', function(Y) {
             // these can automatically be ignored.
         if (boundingBox.model) {
           var annotations = boundingBox.model.get('annotations');
-          return ((!Y.Lang.isNumber(boundingBox.x) &&
-                  !(annotations && annotations['gui-x'])));
+          return (isNaN(boundingBox.x) &&
+                  !(annotations && annotations['gui-x']));
         }
         return false;
       });

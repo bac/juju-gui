@@ -98,6 +98,7 @@ YUI.add('entity-files', function() {
         codeLink = (
           <li className="entity-files__link section__list-item">
             <a ref="codeLink"
+              className="link"
               target="_blank"
               href={codeUrl}>
               View code
@@ -136,7 +137,10 @@ YUI.add('entity-files', function() {
           var fileLink = `${url}/${path}`;
           return (
             <li key={path} className="entity-files__file">
-              <a href={fileLink} title={fileName} target="_blank">
+              <a href={fileLink}
+                className="link"
+                title={fileName}
+                target="_blank">
                 {fileName}
               </a>
             </li>
@@ -174,11 +178,10 @@ YUI.add('entity-files', function() {
     },
 
     render: function() {
-      var entityModel = this.props.entityModel;
-      var files = entityModel.get('files');
-      var name = (entityModel.get('entityType') === 'bundle')?
-        entityModel.get('name'):entityModel.get('full_name');
-      var archiveUrl = `${this.props.apiUrl}/${name}/archive`;
+      const entityModel = this.props.entityModel;
+      const files = entityModel.get('files');
+      const url = window.jujulib.URL.fromLegacyString(entityModel.get('id'));
+      const archiveUrl = `${this.props.apiUrl}/${url.legacyPath()}/archive`;
       return (
         <div className="entity-files section" id="files">
           <h3 className="section__title">
@@ -188,6 +191,7 @@ YUI.add('entity-files', function() {
             {this._generateCodeLink(entityModel.get('code_source'))}
             <li className="entity-files__link section__list-item">
               <a target="_blank"
+                className="link"
                 href={archiveUrl}>
                 Download .zip
               </a>

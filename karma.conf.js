@@ -7,10 +7,12 @@ module.exports = function(config) {
     // base path that will be used to resolve all patterns (eg. files, exclude)
     basePath: '',
 
+    // Set up the log level so that console.log messages are visible.
+    browserConsoleLogOptions: {level: 'log'},
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: ['jasmine', 'chai-sinon'],
+    frameworks: ['jasmine', 'jasmine-expect-jsx', 'chai-sinon'],
 
     // List of files / patterns to load in the browser; Karma is smart enough,
     // with the preprocessors, to watch the source files and serve the compiled
@@ -19,10 +21,13 @@ module.exports = function(config) {
       'jujugui/static/gui/src/app/jujulib/index.js',
       'jujugui/static/gui/src/app/jujulib/charmstore.js',
       'jujugui/static/gui/src/app/jujulib/plans.js',
+      'jujugui/static/gui/src/app/jujulib/payment.js',
+      'jujugui/static/gui/src/app/jujulib/stripe.js',
       'jujugui/static/gui/src/app/jujulib/terms.js',
       'jujugui/static/gui/src/app/jujulib/reconnecting-websocket.js',
       'jujugui/static/gui/src/app/jujulib/urls.js',
       'jujugui/static/gui/src/app/jujulib/bakery-factory.js',
+      'jujugui/static/gui/src/app/jujulib/bundleservice.js',
       'jujugui/static/gui/src/app/jujulib/test-*.js',
 
       'jujugui/static/gui/src/app/state/*.js',
@@ -46,27 +51,29 @@ module.exports = function(config) {
 
       'jujugui/static/gui/src/app/components/**/*.js',
 
+      'jujugui/static/gui/build/app/user/user.js',
+      'jujugui/static/gui/build/app/user/test-user.js',
+
       'jujugui/static/gui/build/app/store/env/acl.js',
       'jujugui/static/gui/build/app/store/env/test-acl.js',
 
       'jujugui/static/gui/build/app/utils/jujulib-conversion-utils.js',
       'jujugui/static/gui/build/app/utils/net-utils.js',
-      'jujugui/static/gui/build/app/utils/test-net-utils.js'
+      'jujugui/static/gui/build/app/utils/test-net-utils.js',
+      'jujugui/static/gui/build/app/utils/analytics.js',
+      'jujugui/static/gui/build/app/utils/test-analytics.js'
     ],
-
 
     // list of files to exclude
     exclude: [
       'jujugui/static/gui/build/app/components/**/*-min.js'
     ],
 
-
     // preprocess matching files before serving them to the browser
     // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
     preprocessors: {
       'jujugui/static/gui/src/app/components/**/*.js': ['babel'],
     },
-
 
     // set the options for the various preprocessors used
     babelPreprocessor: {
@@ -78,34 +85,28 @@ module.exports = function(config) {
       }
     },
 
-
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['mocha'],
+    reporters: ['jasmine-expect-jsx', 'mocha'],
 
     // web server and port
     hostname: '0.0.0.0',
     port: 6544,
 
-
     // enable / disable colors in the output (reporters and logs)
     colors: true,
-
 
     // level of logging
     // possible values: config.LOG_DISABLE || config.LOG_ERROR || config.LOG_WARN || config.LOG_INFO || config.LOG_DEBUG
     logLevel: config.LOG_INFO,
 
-
     // enable / disable watching file and executing tests whenever any file changes
     autoWatch: true,
-
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
     browsers: ['PhantomJS'],
-
 
     // Continuous Integration mode
     // if true, Karma captures browsers, runs the tests and exits

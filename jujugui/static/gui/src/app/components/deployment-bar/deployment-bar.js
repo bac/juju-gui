@@ -28,6 +28,7 @@ YUI.add('deployment-bar', function() {
       generateChangeDescription: React.PropTypes.func.isRequired,
       hasEntities: React.PropTypes.bool.isRequired,
       modelCommitted: React.PropTypes.bool.isRequired,
+      sendAnalytics: React.PropTypes.func.isRequired,
       showInstall: React.PropTypes.bool.isRequired
     },
 
@@ -77,7 +78,7 @@ YUI.add('deployment-bar', function() {
     _getDeployButtonLabel: function() {
       var label = this.props.modelCommitted ? 'Commit changes'
         : 'Deploy changes';
-      return label  + ' (' +
+      return label + ' (' +
         Object.keys(this.props.currentChangeSet).length + ')';
     },
 
@@ -105,6 +106,11 @@ YUI.add('deployment-bar', function() {
       @method _deployAction
     */
     _deployAction: function() {
+      this.props.sendAnalytics(
+        'Deployment Flow',
+        'Button click',
+        'deploy'
+      );
       this.props.changeState({
         gui: {
           deploy: ''
@@ -112,9 +118,31 @@ YUI.add('deployment-bar', function() {
       });
     },
 
-    render: function() {
+    /**
+      Generate the deploy button or read-only notice.
+
+      @method _generateButton
+    */
+    _generateButton: function() {
       var changeCount = Object.keys(this.props.currentChangeSet).length;
       var deployButton = this._getDeployButtonLabel();
+      if (this.props.acl.isReadOnly()) {
+        return (
+          <div className="deployment-bar__read-only">
+            Read only
+          </div>);
+      }
+      return (
+        <div className="deployment-bar__deploy">
+          <juju.components.GenericButton
+            action={this._deployAction}
+            type="inline-deployment"
+            disabled={changeCount === 0}
+            title={deployButton} />
+        </div>);
+    },
+
+    render: function() {
       return (
         <juju.components.Panel
           instanceName="deployment-bar-panel"
@@ -123,13 +151,7 @@ YUI.add('deployment-bar', function() {
             {this._generateInstallButton()}
             <juju.components.DeploymentBarNotification
               change={this.state.latestChangeDescription} />
-            <div className="deployment-bar__deploy">
-              <juju.components.GenericButton
-                action={this._deployAction}
-                type="inline-deployment"
-                disabled={this.props.acl.isReadOnly() || changeCount === 0}
-                title={deployButton} />
-            </div>
+            {this._generateButton()}
           </div>
         </juju.components.Panel>
       );
