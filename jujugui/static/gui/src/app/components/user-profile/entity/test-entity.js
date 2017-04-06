@@ -35,7 +35,11 @@ describe('UserProfileEntity', () => {
       lastConnection: 'today',
       owner: 'test-owner',
       isController: false,
-      isAlive: true
+      isAlive: true,
+      cloud: 'aws',
+      credential: 'aws_user@local_foobar',
+      credentialName: 'foobar',
+      numMachines: 5
     };
     window.flags = {};
   });
@@ -66,7 +70,15 @@ describe('UserProfileEntity', () => {
         <div>
           <div className="expanding-row__expanded-header twelve-col">
             <div className="six-col no-margin-bottom">
-              {undefined}{'sandbox'}
+              {undefined}
+              <div className="entity-title">
+                <span className="entity-title__name">
+                  sandbox
+                </span>
+                <span className="entity-title__credential">
+                  foobar
+                </span>
+              </div>
             </div>
             <div className={'expanding-row__expanded-header-action ' +
               'six-col last-col no-margin-bottom'}>
@@ -84,8 +96,21 @@ describe('UserProfileEntity', () => {
             'no-margin-bottom'}>
             {undefined}
             {undefined}
-            <div className="three-col last-col">
-              Owner: {'test-owner'}
+            <div className="modelInfo">
+              <div className="prepend-three four-col">
+                aws/no region
+              </div>
+              <div className="two-col">
+                <juju.components.DateDisplay
+                  date="today"
+                  relative={true} />
+              </div>
+              <div className="one-col">
+                5
+              </div>
+              <div className="two-col last-col">
+                test-owner
+              </div>
             </div>
             {undefined}
             {undefined}
@@ -94,7 +119,7 @@ describe('UserProfileEntity', () => {
           </div>
         </div>
       </juju.components.ExpandingRow>);
-    assert.deepEqual(output, expected);
+    expect(output).toEqualJSX(expected);
   });
 
   it('can render a bundle with applications', () => {
@@ -127,7 +152,12 @@ describe('UserProfileEntity', () => {
         <div>
           <div className="expanding-row__expanded-header twelve-col">
             <div className="six-col no-margin-bottom">
-              {undefined}{'django-cluster'}
+              {undefined}
+              <div className="entity-title">
+                <span className="entity-title__name">
+                  django-cluster
+                </span>
+              </div>
             </div>
             <div className={'expanding-row__expanded-header-action ' +
               'six-col last-col no-margin-bottom'}>
@@ -185,7 +215,7 @@ describe('UserProfileEntity', () => {
           </div>
         </div>
       </juju.components.ExpandingRow>);
-    assert.deepEqual(output, expected);
+    expect(output).toEqualJSX(expected);
   });
 
   it('can render a bundle with services', () => {
@@ -218,7 +248,12 @@ describe('UserProfileEntity', () => {
         <div>
           <div className="expanding-row__expanded-header twelve-col">
             <div className="six-col no-margin-bottom">
-              {undefined}{'django-cluster'}
+              {undefined}
+              <div className="entity-title">
+                <span className="entity-title__name">
+                  django-cluster
+                </span>
+              </div>
             </div>
             <div className={'expanding-row__expanded-header-action ' +
               'six-col last-col no-margin-bottom'}>
@@ -276,7 +311,7 @@ describe('UserProfileEntity', () => {
           </div>
         </div>
       </juju.components.ExpandingRow>);
-    assert.deepEqual(output, expected);
+    expect(output).toEqualJSX(expected);
   });
 
   it('can render a charm', () => {
@@ -305,7 +340,11 @@ describe('UserProfileEntity', () => {
               <img className="user-profile__entity-icon"
                 src={undefined}
                 title="django" />
-              django
+              <div className="entity-title">
+                <span className="entity-title__name">
+                  django
+                </span>
+              </div>
             </div>
             <div className={'expanding-row__expanded-header-action ' +
               'six-col last-col no-margin-bottom'}>
@@ -350,7 +389,7 @@ describe('UserProfileEntity', () => {
           </div>
         </div>
       </juju.components.ExpandingRow>);
-    assert.deepEqual(output, expected);
+    expect(output).toEqualJSX(expected);
   });
 
   it('can switch to a model', () => {

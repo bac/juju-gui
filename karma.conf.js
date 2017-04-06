@@ -12,12 +12,13 @@ module.exports = function(config) {
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: ['jasmine', 'chai-sinon'],
+    frameworks: ['jasmine', 'jasmine-expect-jsx', 'chai-sinon'],
 
     // List of files / patterns to load in the browser; Karma is smart enough,
     // with the preprocessors, to watch the source files and serve the compiled
     // files.
     files: [
+      'node_modules/keysim/dist/keysim.js',
       'jujugui/static/gui/src/app/jujulib/index.js',
       'jujugui/static/gui/src/app/jujulib/charmstore.js',
       'jujugui/static/gui/src/app/jujulib/plans.js',
@@ -50,6 +51,9 @@ module.exports = function(config) {
       'jujugui/static/gui/build/app/assets/javascripts/yui/loader/loader.js',
 
       'jujugui/static/gui/src/app/components/**/*.js',
+
+      'jujugui/static/gui/build/app/user/user.js',
+      'jujugui/static/gui/build/app/user/test-user.js',
 
       'jujugui/static/gui/build/app/store/env/acl.js',
       'jujugui/static/gui/build/app/store/env/test-acl.js',
@@ -85,7 +89,7 @@ module.exports = function(config) {
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['mocha'],
+    reporters: ['jasmine-expect-jsx', 'mocha'],
 
     // web server and port
     hostname: '0.0.0.0',

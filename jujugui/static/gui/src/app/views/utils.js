@@ -1451,6 +1451,31 @@ YUI.add('juju-view-utils', function(Y) {
   };
 
   /**
+    Navigate to the account, displaying a confirmation if there are
+    uncommitted changes.
+
+    @method showAccount
+    @param {Object} ecs Reference to the ecs.
+    @param {Function} changeState The method for changing the app state.
+  */
+  utils.showAccount = function(ecs, changeState) {
+    var currentChangeSet = ecs.getCurrentChangeSet();
+    // If there are uncommitted changes then show a confirmation popup.
+    if (Object.keys(currentChangeSet).length > 0) {
+      utils._showUncommittedConfirm(
+        utils._showAccount.bind(this, ecs, changeState, true));
+      return;
+    }
+    utils._hidePopup();
+    changeState({
+      profile: null,
+      model: null,
+      root: 'account',
+      store: null
+    });
+  };
+
+  /**
     Deploy or commit to a model.
 
     @method deploy
@@ -1471,6 +1496,7 @@ YUI.add('juju-view-utils', function(Y) {
   utils.deploy = function(app, callback, autoplace=true, modelName, args) {
     const env = app.env;
     const controllerAPI = app.controllerAPI;
+    const user = app.user;
     if (autoplace) {
       app._autoPlaceUnits();
     }
@@ -1506,7 +1532,7 @@ YUI.add('juju-view-utils', function(Y) {
       app.switchEnv(socketUrl, null, null, commit, true, false);
     };
     controllerAPI.createModel(
-      modelName, controllerAPI.getCredentials().user, args, handler);
+      modelName, user.controller.user, args, handler);
   };
 
   /**

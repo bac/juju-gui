@@ -32,10 +32,22 @@ describe('Controller API', function() {
     });
   });
 
+  const getMockStorage = function() {
+    return new function() {
+      return {
+        store: {},
+        setItem: function(name, val) { this.store['name'] = val; },
+        getItem: function(name) { return this.store['name'] || null; }
+      };
+    };
+  };
+
   beforeEach(function() {
+    const user = new window.jujugui.User({storage: getMockStorage()});
+    user.controller = {user: 'user', password: 'password'};
     conn = new utils.SocketStub();
     controllerAPI = new juju.ControllerAPI({
-      conn: conn, user: 'user', password: 'password'
+      conn: conn, user: user
     });
     controllerAPI.connect();
     controllerAPI.set('facades', {
@@ -55,8 +67,6 @@ describe('Controller API', function() {
 
   afterEach(function() {
     cleanups.forEach(function(action) {action();});
-    // We need to clear any credentials stored in sessionStorage.
-    controllerAPI.setCredentials(null);
     if (controllerAPI && controllerAPI.destroy) {controllerAPI.destroy();}
     if (conn && conn.destroy) {conn.destroy();}
   });
@@ -139,7 +149,9 @@ describe('Controller API', function() {
     });
 
     it('stops the pinger when the controller is destroyed', function(done) {
-      const api = new juju.ControllerAPI({conn: conn});
+      const userClass = new window.jujugui.User({storage: getMockStorage()});
+      userClass.controller = {user: 'user', password: 'password'};
+      const api = new juju.ControllerAPI({conn: conn, user: userClass});
       api.after('destroy', evt => {
         assert.strictEqual(setInterval.calledOnce, true, 'setInterval');
         assert.strictEqual(clearInterval.calledOnce, true, 'clearInterval');
@@ -192,7 +204,8 @@ describe('Controller API', function() {
 
     it('sends the correct login message for external users', () => {
       noopHandleLogin();
-      controllerAPI.setCredentials({user: 'who@external', password: 'pswd'});
+      controllerAPI.get('user').controller = {
+        user: 'who@external', password: 'pswd'};
       controllerAPI.login();
       const lastMessage = conn.last_message();
       const expected = {
@@ -210,7 +223,7 @@ describe('Controller API', function() {
       // Assume login to be the first request.
       conn.msg({'request-id': 1, error: 'Invalid user or password'});
       assert.deepEqual(
-        controllerAPI.getCredentials(),
+        controllerAPI.get('user').controller,
         {user: '', password: '', macaroons: null});
       assert.isTrue(controllerAPI.failedAuthentication);
     });
@@ -266,7 +279,7 @@ describe('Controller API', function() {
     });
 
     it('avoids sending login requests without credentials', function() {
-      controllerAPI.setCredentials(null);
+      controllerAPI.get('user').controller = {};
       controllerAPI.login();
       assert.equal(0, conn.messages.length);
     });
@@ -344,7 +357,7 @@ describe('Controller API', function() {
     });
 
     it('sends an initial login request with macaroons', function() {
-      controllerAPI.setCredentials({macaroons: ['macaroon']});
+      controllerAPI.get('user').controller = {macaroons: ['macaroon']};
       controllerAPI.loginWithMacaroon(makeBakery());
       assert.strictEqual(conn.messages.length, 1, 'unexpected msg number');
       assertRequest(conn.last_message(), ['macaroon']);
@@ -425,7 +438,7 @@ describe('Controller API', function() {
         }
       });
       assert.strictEqual(error, null);
-      const creds = controllerAPI.getCredentials();
+      const creds = controllerAPI.get('user').controller;
       assert.strictEqual(creds.user, 'who@local');
       assert.strictEqual(creds.password, '');
       assert.deepEqual(creds.macaroons, ['macaroon', 'discharge']);
@@ -436,8 +449,8 @@ describe('Controller API', function() {
     });
 
     it('succeeds with already stored macaroons', function() {
-      controllerAPI.setCredentials(
-        {macaroons: ['already stored', 'macaroons']});
+      controllerAPI.get('user').controller = {
+        macaroons: ['already stored', 'macaroons']};
       controllerAPI.loginWithMacaroon(makeBakery(), callback);
       assert.strictEqual(conn.messages.length, 1, 'unexpected msg number');
       const requestId = assertRequest(
@@ -454,7 +467,7 @@ describe('Controller API', function() {
         }
       });
       assert.strictEqual(error, null);
-      const creds = controllerAPI.getCredentials();
+      const creds = controllerAPI.get('user').controller;
       assert.strictEqual(creds.user, 'dalek@local');
       assert.strictEqual(creds.password, '');
       assert.deepEqual(creds.macaroons, ['already stored', 'macaroons']);
@@ -702,7 +715,8 @@ describe('Controller API', function() {
         assert.strictEqual(result.series, 'trusty');
         assert.strictEqual(result.provider, 'lxd');
         assert.strictEqual(result.uuid, '5bea955d-7a43-47d3-89dd-b02c923e');
-        assert.strictEqual(result.credential, 'who');
+        assert.strictEqual(result.credential, 'aws_who@external_who');
+        assert.strictEqual(result.credentialName, 'who');
         assert.strictEqual(result.region, 'gallifrey');
         assert.strictEqual(result.cloud, 'aws');
         assert.strictEqual(result.numMachines, 3);
@@ -755,7 +769,7 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-7a43-47d3-89dd-b02c923e',
               'controller-uuid': '5bea955d-7a43-47d3-89dd',
-              'cloud-credential-tag': 'cloudcred-who',
+              'cloud-credential-tag': 'cloudcred-aws_who@external_who',
               'cloud-region': 'gallifrey',
               'cloud-tag': 'cloud-aws',
               machines: [1, 2, 3],
@@ -948,7 +962,8 @@ describe('Controller API', function() {
 
   describe('listModelsWithInfo', function() {
     it('info for a single model', done => {
-      controllerAPI.setCredentials({user: 'who@external', password: 'tardis'});
+      controllerAPI.get('user').controller = {
+        user: 'who@external', password: 'tardis'};
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, null);
@@ -961,7 +976,8 @@ describe('Controller API', function() {
         assert.strictEqual(result.provider, 'lxd');
         assert.strictEqual(result.uuid, '5bea955d-1');
         assert.strictEqual(result.controllerUUID, '5bea955d-c');
-        assert.strictEqual(result.credential, 'who');
+        assert.strictEqual(result.credential, 'aws_who@external_who');
+        assert.strictEqual(result.credentialName, 'who');
         assert.strictEqual(result.region, 'gallifrey');
         assert.strictEqual(result.cloud, 'aws');
         assert.strictEqual(result.numMachines, 2);
@@ -1038,7 +1054,7 @@ describe('Controller API', function() {
               'provider-type': 'lxd',
               uuid: '5bea955d-1',
               'controller-uuid': '5bea955d-c',
-              'cloud-credential-tag': 'cloudcred-who',
+              'cloud-credential-tag': 'cloudcred-aws_who@external_who',
               'cloud-region': 'gallifrey',
               'cloud-tag': 'cloud-aws',
               machines: [{}, {}],
@@ -1066,8 +1082,8 @@ describe('Controller API', function() {
     });
 
     it('info for multiple models', done => {
-      controllerAPI.setCredentials(
-        {user: 'dalek@external', password: 'exterminate'});
+      controllerAPI.get('user').controller =
+        {user: 'dalek@external', password: 'exterminate'};
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, null);
@@ -1225,7 +1241,7 @@ describe('Controller API', function() {
     });
 
     it('credentials error', done => {
-      controllerAPI.setCredentials(null);
+      controllerAPI.get('user').controller = {};
       // Perform the request.
       controllerAPI.listModelsWithInfo((err, models) => {
         assert.strictEqual(err, 'called without credentials');
@@ -1831,11 +1847,15 @@ describe('Controller API', function() {
       ];
       controllerAPI.getCloudCredentialNames(pairs, (err, results) => {
         assert.strictEqual(err, null);
-        assert.deepEqual(results, [
-          {names: ['name1', 'name2']},
-          {err: 'bad wolf'},
-          {names: ['name3']},
-        ]);
+        assert.deepEqual(results, [{
+          names: ['ldx_spinach@local_name1', 'ldx_spinach@local_name2'],
+          displayNames: ['name1', 'name2']
+        }, {
+          err: 'bad wolf'
+        }, {
+          names: ['google_spinach@local_name3'],
+          displayNames: ['name3']
+        }]);
         const msg = conn.last_message();
         assert.deepEqual(msg, {
           'request-id': 1,
@@ -1855,11 +1875,14 @@ describe('Controller API', function() {
         'request-id': 1,
         response: {
           results: [{
-            result: ['cloudcred-name1', 'cloudcred-name2'],
+            result: [
+              'cloudcred-ldx_spinach@local_name1',
+              'cloudcred-ldx_spinach@local_name2'
+            ],
           }, {
             error: {message: 'bad wolf'},
           }, {
-            result: ['cloudcred-name3'],
+            result: ['cloudcred-google_spinach@local_name3'],
           }]
         }
       });
@@ -1892,22 +1915,28 @@ describe('Controller API', function() {
   describe('getCloudCredentials', function() {
     it('retrieves the requested credentials by name', function(done) {
       // Perform the request.
-      const names = ['cred1', 'cred2', 'no-such'];
+      const names = [
+        'google_spinach@local_cred1',
+        'aws_spinach@local_cred2',
+        'no-such'
+      ];
       controllerAPI.getCloudCredentials(names, (err, creds) => {
         assert.strictEqual(err, null);
         assert.deepEqual(creds, {
-          cred1: {
+          'google_spinach@local_cred1': {
             authType: 'jsonfile',
             attrs: {
               type: 'service_account',
               project_id: 'juju-42',
               private_key_id: 'my-private-key-id'
             },
+            displayName: 'cred1',
             redacted: ['secret', 'confidential']
           },
-          cred2: {
+          'aws_spinach@local_cred2': {
             authType: 'oauth2',
             attrs: {},
+            displayName: 'cred2',
             redacted: []
           },
           'no-such': {err: 'no such credentials'}
@@ -1919,8 +1948,8 @@ describe('Controller API', function() {
           request: 'Credential',
           version: 1,
           params: {entities: [
-            {tag: 'cloudcred-cred1'},
-            {tag: 'cloudcred-cred2'},
+            {tag: 'cloudcred-google_spinach@local_cred1'},
+            {tag: 'cloudcred-aws_spinach@local_cred2'},
             {tag: 'cloudcred-no-such'}
           ]}
         });

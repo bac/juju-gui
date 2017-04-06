@@ -69,12 +69,15 @@ const createDeploymentFlow = (props = {}) => {
     changesFilterByParent: sinon.stub(),
     charmsGetById: charmsGetById,
     charmstore: {},
+    createToken: sinon.stub(),
+    createUser: sinon.stub(),
     deploy: sinon.stub().callsArg(0),
     generateAllChangeDescriptions: sinon.stub(),
     generateCloudCredentialName: sinon.stub(),
     getAgreementsByTerms: getAgreementsByTerms,
     getAuth: sinon.stub().returns({}),
     getCloudProviderDetails: sinon.stub(),
+    getCountries: sinon.stub(),
     getUser: sinon.stub(),
     getUserName: sinon.stub().returns('dalek'),
     groupedChanges: groupedChanges,
@@ -209,6 +212,7 @@ describe('DeploymentFlow', function() {
             setSSHKey={instance._setSSHKey}
           />
         </juju.components.DeploymentSection>
+        {undefined}
         <juju.components.DeploymentSection
           completed={false}
           disabled={true}
@@ -370,7 +374,7 @@ describe('DeploymentFlow', function() {
       modelCommitted: true
     });
     const output = renderer.getRenderOutput();
-    assert.isFalse(output.props.children[4].props.disabled);
+    assert.strictEqual(output.props.children[5].props.disabled, false);
   });
 
   it('can enable the services section', function() {
@@ -380,7 +384,24 @@ describe('DeploymentFlow', function() {
       modelCommitted: true
     });
     const output = renderer.getRenderOutput();
-    assert.isFalse(output.props.children[5].props.disabled);
+    assert.strictEqual(output.props.children[6].props.disabled, false);
+  });
+
+  it('displays the VPC section in new AWS models', function() {
+    const renderer = createDeploymentFlow({modelCommitted: false});
+    const instance = renderer.getMountedInstance();
+    instance._setCloud({name: 'aws'});
+    const output = renderer.getRenderOutput();
+    const expectedOutput = (
+      <juju.components.DeploymentSection
+        completed={false}
+        disabled={false}
+        instance="deployment-vpc"
+        showCheck={false}>
+        <juju.components.DeploymentVPC setVPCId={instance._setVPCId} />
+      </juju.components.DeploymentSection>
+    );
+    assert.deepEqual(output.props.children[4], expectedOutput);
   });
 
   it('can enable the budget section', function() {
@@ -397,16 +418,24 @@ describe('DeploymentFlow', function() {
   it('can show the payments section', function() {
     const acl = {isReadOnly: sinon.stub()};
     const addNotification = sinon.stub();
+    const createToken = sinon.stub();
+    const createUser = sinon.stub();
+    const getCountries = sinon.stub();
     const getUser = sinon.stub();
+    const validateForm = sinon.stub();
     const renderer = createDeploymentFlow({
       acl: acl,
       addNotification: addNotification,
       cloud: {name: 'cloud'},
+      createToken: createToken,
+      createUser: createUser,
       credential: 'cred',
+      getCountries: getCountries,
       getUser: getUser,
       isLegacyJuju: false,
       profileUsername: 'spinach',
-      showPay: true
+      showPay: true,
+      validateForm: validateForm
     });
     const instance = renderer.getMountedInstance();
     const output = renderer.getRenderOutput();
@@ -420,12 +449,16 @@ describe('DeploymentFlow', function() {
         <juju.components.DeploymentPayment
           acl={acl}
           addNotification={addNotification}
+          createToken={createToken}
+          createUser={createUser}
+          getCountries={getCountries}
           getUser={getUser}
           paymentUser={null}
           setPaymentUser={instance._setPaymentUser}
-          username="spinach" />
+          username="spinach"
+          validateForm={validateForm} />
       </juju.components.DeploymentSection>);
-    assert.deepEqual(output.props.children[8], expected);
+    assert.deepEqual(output.props.children[9], expected);
   });
 
   it('can hide the agreements section', function() {
@@ -434,7 +467,7 @@ describe('DeploymentFlow', function() {
     });
     const output = renderer.getRenderOutput();
     assert.isUndefined(
-      output.props.children[9].props.children.props.children[0]);
+      output.props.children[10].props.children.props.children[0]);
   });
 
   it('can handle the agreements when there are no added apps', function() {
@@ -446,7 +479,7 @@ describe('DeploymentFlow', function() {
     });
     const output = renderer.getRenderOutput();
     assert.isUndefined(
-      output.props.children[9].props.children.props.children[0]);
+      output.props.children[10].props.children.props.children[0]);
   });
 
   it('can display the agreements section', function() {
@@ -461,7 +494,7 @@ describe('DeploymentFlow', function() {
     });
     const output = renderer.getRenderOutput();
     const instance = renderer.getMountedInstance();
-    const agreements = output.props.children[9].props.children
+    const agreements = output.props.children[10].props.children
       .props.children[0];
     const expected = (
       <div className="deployment-flow__deploy-option">
@@ -483,7 +516,7 @@ describe('DeploymentFlow', function() {
       modelCommitted: false
     });
     const output = renderer.getRenderOutput();
-    const agreements = output.props.children[9].props.children
+    const agreements = output.props.children[10].props.children
       .props.children[0];
     const className = agreements.props.className;
     const expectedClass = 'deployment-flow__deploy-option--disabled';
@@ -628,14 +661,15 @@ describe('DeploymentFlow', function() {
     instance._updateModelName();
     const props = instance.props;
     const output = renderer.getRenderOutput();
-    output.props.children[9].props.children.props.children[1].props.children
+    output.props.children[10].props.children.props.children[1].props.children
       .props.action();
     assert.equal(props.deploy.callCount, 1);
     assert.strictEqual(props.deploy.args[0].length, 4);
     assert.equal(props.deploy.args[0][2], 'Lamington');
     assert.deepEqual(props.deploy.args[0][3], {
-      credential: 'cred',
+      config: {},
       cloud: 'cloud',
+      credential: 'cred',
       region: 'north'
     });
     assert.equal(props.changeState.callCount, 1);
@@ -664,7 +698,7 @@ describe('DeploymentFlow', function() {
     instance._handleTermsAgreement({target: {checked: true}});
     const props = instance.props;
     const output = renderer.getRenderOutput();
-    output.props.children[9].props.children.props.children[1].props.children
+    output.props.children[10].props.children.props.children[1].props.children
       .props.action();
     assert.equal(props.deploy.callCount, 0,
       'The deploy function should not be called');
@@ -861,13 +895,13 @@ describe('DeploymentFlow', function() {
       }
     };
     let output = renderer.getRenderOutput();
-    let deployButton = output.props.children[9].props.children.props
+    let deployButton = output.props.children[10].props.children.props
       .children[1].props.children;
     deployButton.props.action();
 
     // .action() rerenders the component so we need to get it again
     output = renderer.getRenderOutput();
-    deployButton = output.props.children[9].props.children.props
+    deployButton = output.props.children[10].props.children.props
       .children[1].props.children;
 
     assert.equal(deployButton.props.disabled, true);
@@ -888,15 +922,16 @@ describe('DeploymentFlow', function() {
     const instance = renderer.getMountedInstance();
     instance.refs = {};
     const output = renderer.getRenderOutput();
-    output.props.children[9].props.children.props.children[1].props.children
+    output.props.children[10].props.children.props.children[1].props.children
       .props.action();
     const deploy = instance.props.deploy;
     assert.equal(deploy.callCount, 1);
     assert.strictEqual(deploy.args[0].length, 4);
     assert.equal(deploy.args[0][2], 'Pavlova');
     assert.deepEqual(deploy.args[0][3], {
-      credential: 'cred',
+      config: {},
       cloud: 'cloud',
+      credential: 'cred',
       region: 'north'
     });
     assert.equal(instance.props.changeState.callCount, 1);
@@ -917,7 +952,7 @@ describe('DeploymentFlow', function() {
     const instance = renderer.getMountedInstance();
     instance._setSSHKey('my SSH key');
     const output = renderer.getRenderOutput();
-    output.props.children[9].props.children.props.children[1].props.children
+    output.props.children[10].props.children.props.children[1].props.children
       .props.action();
     const deploy = instance.props.deploy;
     assert.equal(deploy.callCount, 1);
@@ -928,6 +963,66 @@ describe('DeploymentFlow', function() {
       cloud: 'azure',
       region: 'skaro',
       config: {'authorized-keys': 'my SSH key'}
+    });
+    assert.equal(instance.props.changeState.callCount, 1);
+  });
+
+  it('can deploy with a VPC id', function() {
+    const charmsGetById = sinon.stub().withArgs('service1').returns({
+      get: sinon.stub().withArgs('terms').returns([])
+    });
+    const renderer = createDeploymentFlow({
+      charmsGetById: charmsGetById,
+      cloud: {name: 'aws'},
+      credential: 'creds',
+      modelCommitted: true,
+      modelName: 'mymodel',
+      region: 'skaro'
+    });
+    const instance = renderer.getMountedInstance();
+    instance._setVPCId('my VPC id');
+    const output = renderer.getRenderOutput();
+    output.props.children[10].props.children.props.children[1].props.children
+      .props.action();
+    const deploy = instance.props.deploy;
+    assert.equal(deploy.callCount, 1);
+    assert.strictEqual(deploy.args[0].length, 4);
+    assert.equal(deploy.args[0][2], 'mymodel');
+    assert.deepEqual(deploy.args[0][3], {
+      credential: 'creds',
+      cloud: 'aws',
+      region: 'skaro',
+      config: {'vpc-id': 'my VPC id', 'vpc-id-force': false}
+    });
+    assert.equal(instance.props.changeState.callCount, 1);
+  });
+
+  it('can deploy with a forced VPC id', function() {
+    const charmsGetById = sinon.stub().withArgs('service1').returns({
+      get: sinon.stub().withArgs('terms').returns([])
+    });
+    const renderer = createDeploymentFlow({
+      charmsGetById: charmsGetById,
+      cloud: {name: 'aws'},
+      credential: 'creds',
+      modelCommitted: true,
+      modelName: 'mymodel',
+      region: 'skaro'
+    });
+    const instance = renderer.getMountedInstance();
+    instance._setVPCId('my VPC id', true);
+    const output = renderer.getRenderOutput();
+    output.props.children[10].props.children.props.children[1].props.children
+      .props.action();
+    const deploy = instance.props.deploy;
+    assert.equal(deploy.callCount, 1);
+    assert.strictEqual(deploy.args[0].length, 4);
+    assert.equal(deploy.args[0][2], 'mymodel');
+    assert.deepEqual(deploy.args[0][3], {
+      credential: 'creds',
+      cloud: 'aws',
+      region: 'skaro',
+      config: {'vpc-id': 'my VPC id', 'vpc-id-force': true}
     });
     assert.equal(instance.props.changeState.callCount, 1);
   });

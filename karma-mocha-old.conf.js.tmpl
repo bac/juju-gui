@@ -23,6 +23,7 @@ module.exports = function(config) {
     // with the preprocessors, to watch the source files and serve the compiled
     // files.
     files: [
+      'node_modules/keysim/dist/keysim.js',
       'jujugui/static/gui/build/modules.js',
       'jujugui/static/gui/src/test/assets/chai.js',
 
@@ -34,6 +35,7 @@ module.exports = function(config) {
       'jujugui/static/gui/src/test/factory.js',
       'jujugui/static/gui/build/app/assets/javascripts/d3.js',
       'jujugui/static/gui/src/app/state/state.js',
+      'jujugui/static/gui/src/app/user/user.js',
 
       'jujugui/static/gui/src/app/jujulib/index.js',
       'jujugui/static/gui/src/app/jujulib/charmstore.js',
@@ -90,7 +92,6 @@ module.exports = function(config) {
       'jujugui/static/gui/src/test/test_model_handlers.js',
       'jujugui/static/gui/src/test/test_model.js',
       'jujugui/static/gui/src/test/test_panzoom.js',
-      'jujugui/static/gui/src/test/test_prettify.js',
       'jujugui/static/gui/src/test/test_relation_utils.js',
       'jujugui/static/gui/src/test/test_service_module.js',
       // test_startup.js was skipped in the old suite.
