@@ -21,8 +21,10 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 YUI.add('user-profile-entity', function() {
 
   juju.components.UserProfileEntity = React.createClass({
+    displayName: 'UserProfileEntity',
 
     propTypes: {
+      acl: React.PropTypes.object,
       changeState: React.PropTypes.func,
       children: React.PropTypes.oneOfType([
         React.PropTypes.object,
@@ -256,7 +258,7 @@ YUI.add('user-profile-entity', function() {
       const region = model.region || 'no region';
       let owner = '--';
       if (model.owner) {
-        owner = model.owner = model.owner.split('@')[0];
+        owner = model.owner.split('@')[0];
       }
       // The main different between this and model-list.js is that we display
       // the credentials used here in place of the model name, as the model
@@ -281,6 +283,38 @@ YUI.add('user-profile-entity', function() {
       );
     },
 
+    /**
+      Generate and return the destroy button if the user is allowed to destroy
+      the given model.
+
+      @param {Object} model A model object as returned by the controller
+        listModelsWithInfo API call.
+      @return {Object} The react button node.
+    */
+    _generateDestroyButton: function(model) {
+      const props = this.props;
+      if (model.isController) {
+        // Do not allow destroying the controller model.
+        return null;
+      }
+      if (!props.acl) {
+        // This should never happen.
+        console.warn('acl object not available while listing models');
+        return null;
+      }
+      if (!props.acl.canRemoveModel(model)) {
+        // The user has not enough access to destroy a model.
+        return null;
+      }
+      return (
+        <juju.components.GenericButton
+          action={props.displayConfirmation}
+          type="inline-base"
+          title="Destroy model"
+        />
+      );
+    },
+
     render: function() {
       const props = this.props;
       const entity = props.entity;
@@ -297,6 +331,7 @@ YUI.add('user-profile-entity', function() {
         </div>
       );
       let buttonAction;
+      let destroyButton = null;
       if (isModel) {
         let name = entity.name;
         if (name.indexOf('/') !== -1) {
@@ -308,7 +343,7 @@ YUI.add('user-profile-entity', function() {
               {name}
             </span>
             <span className="entity-title__credential">
-              {entity.credential}
+              {entity.credentialName}
             </span>
           </div>
         );
@@ -317,6 +352,7 @@ YUI.add('user-profile-entity', function() {
           name: name,
           owner: entity.owner
         });
+        destroyButton = this._generateDestroyButton(entity);
       } else {
         buttonAction = this._viewEntity.bind(this, entity.id);
       }
@@ -328,11 +364,6 @@ YUI.add('user-profile-entity', function() {
         'user-profile__entity': true,
         'user-profile__list-row': true
       };
-      const destroyButton = isModel && !entity.isController ? (
-        <juju.components.GenericButton
-          action={props.displayConfirmation}
-          type="inline-base"
-          title="Destroy model" />) : undefined;
       return (
         <juju.components.ExpandingRow classes={classes}
           expanded={props.expanded}>
@@ -368,6 +399,7 @@ YUI.add('user-profile-entity', function() {
 
 }, '', {
   requires: [
+    'date-display',
     'expanding-row',
     'generic-button'
   ]

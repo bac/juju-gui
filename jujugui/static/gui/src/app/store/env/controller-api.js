@@ -356,11 +356,11 @@ YUI.add('juju-controller-api', function(Y) {
 
       // Perform the API call.
       var macaroons = this.get('user').controller.macaroons;
+      this.pendingLoginResponse = true;
       sendLoginRequest(
         macaroons,
         handleResponse.bind(this, bakery, macaroons, cback)
       );
-      this.pendingLoginResponse = true;
     },
 
     /**
@@ -479,6 +479,7 @@ YUI.add('juju-controller-api', function(Y) {
         - controllerUUID: the corresponding controller unique identifier;
         - owner: the name of the user owning the model;
         - credential: the name of the credential used to create the model;
+        - credentialName: the readable credential name extracted from the id;
         - region: the model region (or null if no regions apply);
         - cloud: the cloud used to deploy the model, as a string;
         - numMachines: the number of machines in the model;
@@ -565,6 +566,7 @@ YUI.add('juju-controller-api', function(Y) {
             controllerUUID: result['controller-uuid'],
             owner: tags.parse(tags.USER, result['owner-tag']),
             credential: credential,
+            credentialName: this._parseCredentialName(credential),
             region: result['cloud-region'] || null,
             cloud: cloud,
             numMachines: machines.length,
@@ -607,6 +609,7 @@ YUI.add('juju-controller-api', function(Y) {
         - controllerUUID: the corresponding controller unique identifier;
         - owner: the name of the user owning the model;
         - credential: the name of the credential used to create the model;
+        - credentialName: the readable credential name extracted from the id;
         - region: the model region (or null if no regions apply);
         - cloud: the cloud used to deploy the model, as a string;
         - numMachines: the number of machines in the model;
@@ -679,6 +682,7 @@ YUI.add('juju-controller-api', function(Y) {
               controllerUUID: model.controllerUUID,
               owner: model.owner,
               credential: model.credential,
+              credentialName: this._parseCredentialName(model.credential),
               region: model.region,
               cloud: model.cloud,
               numMachines: model.numMachines,
@@ -1077,6 +1081,22 @@ YUI.add('juju-controller-api', function(Y) {
     },
 
     /**
+      Get the credential name for display from the credential id.
+
+      @method _parseCredentialName
+      @param {String} id The id of a could credential in the form
+        cloud_user@scope_name.
+      @returns {String} the credential display name.
+    */
+    _parseCredentialName: id => {
+      const parts = id.split('_');
+      if (parts.length === 3) {
+        return parts[2];
+      }
+      return id;
+    },
+
+    /**
       Returns the names of cloud credentials for a set of users.
 
       @method getCloudCredentialNames
@@ -1091,6 +1111,7 @@ YUI.add('juju-controller-api', function(Y) {
         - err: a possible result specific error, in which case all subsequent
           fields are omitted;
         - names: the list of names that identify cloud credentials
+        - displayNames: the list of credential names extracted from the full id
           corresponding to the user/cloud pair provided as input.
         If no errors occur, error parameters are null. Otherwise, in case of
         errors, the second argument is an empty array.
@@ -1121,7 +1142,12 @@ YUI.add('juju-controller-api', function(Y) {
           const names = credentialTags.map(credentialTag => {
             return tags.parse(tags.CREDENTIAL, credentialTag);
           });
-          return {names: names};
+          const displayNames = names.map(
+              name => this._parseCredentialName(name));
+          return {
+            names: names,
+            displayNames: displayNames
+          };
         });
         callback(null, credentials);
       };
@@ -1161,6 +1187,7 @@ YUI.add('juju-controller-api', function(Y) {
         - authType: the authentication type (as a string, like 'jsonfile');
         - attrs: non-secret credential values as an object mapping strings to
           strings. Keys there are based on the cloud type;
+       - displayName: the credential name extracted from the full id;
         - redacted: a list of names of redacted attributes.
         If no errors occur, error parameters are null. Otherwise, in case of
         errors, the second argument is an empty object.
@@ -1192,6 +1219,7 @@ YUI.add('juju-controller-api', function(Y) {
           prev[name] = {
             authType: entry['auth-type'] || '',
             attrs: entry.attrs || {},
+            displayName: this._parseCredentialName(name),
             redacted: entry.redacted || []
           };
           return prev;

@@ -166,10 +166,13 @@ describe('App', function() {
 
       beforeEach(function() {
         // Set up the MAAS link node.
-        maasNode = Y.Node.create(
-            '<div id="maas-server" style="display:none">' +
-            '  <a href="">MAAS UI</a>' +
-            '</div>');
+        maasNode = document.createElement('div');
+        maasNode.setAttribute('id', 'maas-server');
+        maasNode.classList.add('hidden');
+        const link = document.createElement('a');
+        const content = document.createTextNode('MAAS UI');
+        link.appendChild(content);
+        maasNode.appendChild(link);
         container.appendChild(maasNode);
         // Create the environment.
         env = new juju.environments.GoEnvironment({
@@ -180,20 +183,20 @@ describe('App', function() {
       });
 
       afterEach(function() {
-        container.one('#maas-server').remove(true);
+        container.querySelector('#maas-server').remove(true);
       });
 
       // Ensure the given MAAS node is shown and includes a link to the given
       // address.
       var assertMaasLinkExists = function(node, address) {
-        assert.strictEqual(node.getStyle('display'), 'block');
-        assert.strictEqual(node.one('a').get('href'), address);
+        assert.strictEqual(node.classList.contains('hidden'), false);
+        assert.strictEqual(node.querySelector('a').href, address);
       };
 
       it('shows a link to the MAAS server if provider is MAAS', function() {
         constructAppInstance({env: env}, this);
         // The MAAS node is initially hidden.
-        assert.strictEqual(maasNode.getStyle('display'), 'none');
+        assert.strictEqual(maasNode.classList.contains('hidden'), true);
         env.set('maasServer', 'http://1.2.3.4/MAAS');
         // Once the MAAS server becomes available, the node is activated and
         // includes a link to the server.
@@ -216,13 +219,13 @@ describe('App', function() {
       it('does not show the MAAS link if provider is not MAAS', function() {
         constructAppInstance({env: env}, this);
         // The MAAS node is initially hidden.
-        assert.strictEqual(maasNode.getStyle('display'), 'none');
+        assert.strictEqual(maasNode.classList.contains('hidden'), true);
         env.set('maasServer', null);
         // The MAAS node is still hidden.
-        assert.strictEqual(maasNode.getStyle('display'), 'none');
+        assert.strictEqual(maasNode.classList.contains('hidden'), true);
         // Further changes to the maasServer attribute don't activate the link.
         env.set('maasServer', 'http://1.2.3.4/MAAS');
-        assert.strictEqual(maasNode.getStyle('display'), 'none');
+        assert.strictEqual(maasNode.classList.contains('hidden'), true);
       });
 
     });
@@ -668,40 +671,6 @@ describe('App', function() {
       localApp.env.login();
     });
 
-    it('navigates to requested url on login', function() {
-      // The difference between this test and the following one is that this
-      // tests the path where there is no hash in the url.
-      var popup = sinon.stub(
-          Y.juju.App.prototype, 'popLoginRedirectPath').returns('/foo/bar');
-      this._cleanups.push(popup.restore);
-      env.connect();
-      sinon.stub(app, 'maskVisibility');
-      sinon.stub(app, 'navigate');
-      sinon.stub(app, 'dispatch');
-      app.onLogin({ data: { result: true } });
-      assert.equal(app.navigate.calledOnce, true);
-      assert.deepEqual(app.navigate.lastCall.args, [
-        '/foo/bar',
-        { overrideAllNamespaces: true }]);
-      // dispatch should not be called if there is no hash in the url.
-      // dispatch should be called in the test below where there is a hash.
-      assert.equal(app.dispatch.calledOnce, false);
-    });
-
-    it('does not navigate to requested url on login with gisf', function() {
-      var popup = sinon.stub(
-          Y.juju.App.prototype, 'popLoginRedirectPath').returns('/foo/bar');
-      this._cleanups.push(popup.restore);
-      env.connect();
-      app.set('gisf', true);
-      sinon.stub(app, 'maskVisibility');
-      sinon.stub(app, 'navigate');
-      sinon.stub(app, 'dispatch');
-      app.onLogin({ data: { result: true } });
-      assert.equal(app.navigate.calledOnce, false,
-        'navigate should not be called in gisf mode here');
-    });
-
     it('tries to log in on first connection', function() {
       // This is the case when credential are stashed.
       env.connect();
@@ -755,36 +724,19 @@ describe('App', function() {
       assert.strictEqual(window.location, app.location);
     });
 
-    describe('popLoginRedirectPath', function() {
-      it('returns and clears redirectPath', function() {
-        app.redirectPath = '/foo/bar/';
-        app.location = {pathname: '/login/'};
-        assert.equal(app.popLoginRedirectPath(), '/foo/bar/');
-        assert.isUndefined(app.redirectPath);
+    it('sends a post to storefront after controller connection in GISF',
+      function() {
+        app.set('gisf', true);
+        sinon.stub(app, 'maskVisibility');
+        sinon.stub(app, 'navigate');
+        sinon.stub(app, 'dispatch');
+        sinon.stub(app.state, 'changeState');
+        sinon.stub(app, '_sendGISFPostBack');
+        sinon.stub(app, '_loginToCharmstore');
+        app.controllerAPI.fire('login');
+        assert.equal(app._sendGISFPostBack.callCount, 1);
+        assert.equal(app._loginToCharmstore.callCount, 1);
       });
-
-      it('prefers the current path if not login', function() {
-        app.redirectPath = '/';
-        app.location = {pathname: '/foo/bar/'};
-        assert.equal(app.popLoginRedirectPath(), '/foo/bar/');
-        assert.isUndefined(app.redirectPath);
-      });
-
-      it('uses root if the redirectPath is /login/', function() {
-        app.redirectPath = '/login/';
-        app.location = {pathname: '/login/'};
-        assert.equal(app.popLoginRedirectPath(), '/');
-        assert.isUndefined(app.redirectPath);
-      });
-
-      it('uses root if the redirectPath is /login', function() {
-        // Missing trailing slash is only difference from previous test.
-        app.redirectPath = '/login';
-        app.location = {pathname: '/login/'};
-        assert.equal(app.popLoginRedirectPath(), '/');
-        assert.isUndefined(app.redirectPath);
-      });
-    });
   });
 
 
@@ -2263,14 +2215,14 @@ describe('App', function() {
     it('is disabled after successful login', done => {
       app.anonymousMode = true;
       app.state = {current: {root: null}};
-      app._renderLoginOutLink = sinon.stub();
+      app._renderUserMenu = sinon.stub();
       // Set a model UUID so that the login subscriber execution stops as soon
       // as possible.
       app.env.set('modelUUID', 'uuid');
       app.controllerAPI.after('login', evt => {
         assert.strictEqual(app.anonymousMode, false, 'anonymousMode');
         assert.strictEqual(
-          app._renderLoginOutLink.called, true, '_renderLoginOutLink');
+          app._renderUserMenu.called, true, '_renderUserMenu');
         done();
       });
       app.controllerAPI.fire('login', {err: null});
