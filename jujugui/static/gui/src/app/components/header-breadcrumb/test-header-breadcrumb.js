@@ -35,7 +35,10 @@ describe('HeaderBreadcrumb', () => {
 
   beforeEach(function() {
     appState = {
-      current: {}
+      current: {},
+      generatePath: (stateObj) => {
+        return `/u/${stateObj.profile}`;
+      }
     };
     listModelsWithInfo = sinon.stub();
     showProfile = sinon.stub();
@@ -86,7 +89,9 @@ describe('HeaderBreadcrumb', () => {
         <div className="header-breadcrumb__loading">Loading model</div>
         <ul className="header-breadcrumb__list" data-username="who">
           <li className="header-breadcrumb__list-item">
-            <a className="header-breadcrumb--link" onClick={comp.clickUser}>
+            <a className="header-breadcrumb--link"
+               onClick={comp.clickUser}
+               href="/u/who">
               who
             </a>
           </li>
@@ -118,7 +123,9 @@ describe('HeaderBreadcrumb', () => {
         <div className="header-breadcrumb__loading">Loading model</div>
         <ul className="header-breadcrumb__list" data-username="dalek">
           <li className="header-breadcrumb__list-item">
-            <a className="header-breadcrumb--link" onClick={comp.clickUser}>
+            <a className="header-breadcrumb--link"
+               onClick={comp.clickUser}
+               href="/u/rose">
               rose
             </a>
           </li>
@@ -151,7 +158,9 @@ describe('HeaderBreadcrumb', () => {
         <div className="header-breadcrumb__loading">Loading model</div>
         <ul className="header-breadcrumb__list" data-username="dalek">
           <li className="header-breadcrumb__list-item">
-            <a className="header-breadcrumb--link" onClick={comp.clickUser}>
+            <a className="header-breadcrumb--link"
+               onClick={comp.clickUser}
+               href="/u/cyberman">
               cyberman
             </a>
           </li>
@@ -196,6 +205,18 @@ describe('HeaderBreadcrumb', () => {
     // There will be no third child if the envSwitcher is rendered
     assert.strictEqual(comp.output.props.children[1].props.children[1],
       null);
+  });
+
+  it('does not render the model switcher when in the account page', () => {
+    appState.current.root = 'account';
+    const comp = render({
+      authDetails: {user: 'who@external', rootUserName: 'who'},
+      modelName: 'mymodel',
+      modelOwner: '',
+      showEnvSwitcher: true
+    });
+    const switcher = comp.output.props.children[1].props.children[1];
+    assert.strictEqual(switcher, null);
   });
 
   it('does not make the username linkable if we hide model switcher', () => {

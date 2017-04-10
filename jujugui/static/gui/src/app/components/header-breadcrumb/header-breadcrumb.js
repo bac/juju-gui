@@ -54,12 +54,9 @@ YUI.add('header-breadcrumb', function() {
       @returns {String} The collection of class names.
     */
     _generateClasses: function() {
-      return classNames(
-        'header-breadcrumb',
-        {
-          'header-breadcrumb--loading-model': this.props.loadingModel
-        }
-      );
+      return classNames('header-breadcrumb', {
+        'header-breadcrumb--loading-model': this.props.loadingModel
+      });
     },
 
     /**
@@ -70,7 +67,12 @@ YUI.add('header-breadcrumb', function() {
     */
     _renderEnvSwitcher: function() {
       const props = this.props;
-      if (!props.showEnvSwitcher || props.appState.current.profile) {
+      const currentState = props.appState.current;
+      if (
+        !props.showEnvSwitcher ||
+        currentState.profile ||
+        currentState.root === 'account'
+      ) {
         return null;
       }
       return (
@@ -150,13 +152,19 @@ YUI.add('header-breadcrumb', function() {
       @param {String} username The name of the profile.
     */
     _buildProfile: function(username) {
+      const props = this.props;
       const linkClasses = classNames('header-breadcrumb--link', {
-        'profile-disabled': !this.props.showEnvSwitcher
+        'profile-disabled': !props.showEnvSwitcher
       });
       const onClick = this._handleProfileClick.bind(this, username);
+      const profileUrl = props.appState.generatePath({profile: username});
       return (
         <li className="header-breadcrumb__list-item">
-          <a className={linkClasses} onClick={onClick}>{username}</a>
+          <a className={linkClasses}
+            onClick={onClick}
+            href={profileUrl}>
+            {username}
+          </a>
         </li>
       );
     },

@@ -21,6 +21,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 YUI.add('charmbrowser-component', function() {
 
   juju.components.Charmbrowser = React.createClass({
+    displayName: 'Charmbrowser',
     propTypes: {
       acl: React.PropTypes.object.isRequired,
       addNotification: React.PropTypes.func.isRequired,
@@ -42,6 +43,7 @@ YUI.add('charmbrowser-component', function() {
       series: React.PropTypes.object.isRequired,
       setPageTitle: React.PropTypes.func.isRequired,
       staticURL: React.PropTypes.string,
+      urllib: React.PropTypes.func.isRequired,
       utils: React.PropTypes.object.isRequired
     },
 
@@ -161,6 +163,8 @@ YUI.add('charmbrowser-component', function() {
           );
           break;
         case 'entity-details':
+          // TODO frankban: do we still really need this?
+          const id = currentState.store || `~${currentState.user}`;
           activeChild = (
               <juju.components.EntityDetails
                 acl={this.props.acl}
@@ -176,11 +180,17 @@ YUI.add('charmbrowser-component', function() {
                 getFile={this.props.getFile}
                 scrollPosition={this.state.scrollPosition}
                 renderMarkdown={this.props.renderMarkdown}
-                id={currentState.store || `~${currentState.user}`}
+                id={id}
+                // This is used to force a component remount when the entity
+                // changes, for instance a charm detail page has a link to
+                // another charm detail page.
+                key={id}
                 pluralize={utils.pluralize}
                 listPlansForCharm={this.props.listPlansForCharm}
                 makeEntityModel={this.props.makeEntityModel}
-                setPageTitle={this.props.setPageTitle} />
+                setPageTitle={this.props.setPageTitle}
+                urllib={this.props.urllib}
+              />
           );
           break;
       }

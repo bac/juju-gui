@@ -21,6 +21,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 YUI.add('entity-details', function() {
 
   juju.components.EntityDetails = React.createClass({
+    displayName: 'EntityDetails',
     detailsXhr: null,
 
     /* Define and validate the properites available on this component. */
@@ -42,7 +43,8 @@ YUI.add('entity-details', function() {
       pluralize: React.PropTypes.func.isRequired,
       renderMarkdown: React.PropTypes.func.isRequired,
       scrollPosition: React.PropTypes.number.isRequired,
-      setPageTitle: React.PropTypes.func.isRequired
+      setPageTitle: React.PropTypes.func.isRequired,
+      urllib: React.PropTypes.func.isRequired
     },
 
     /**
@@ -90,7 +92,9 @@ YUI.add('entity-details', function() {
                   deployService={this.props.deployService}
                   plans={this.state.plans}
                   pluralize={this.props.pluralize}
-                  scrollPosition={this.props.scrollPosition} />
+                  scrollPosition={this.props.scrollPosition}
+                  urllib={this.props.urllib}
+                />
                 {this._generateDiagram(entityModel)}
                 <juju.components.EntityContent
                   apiUrl={this.props.apiUrl}
@@ -100,7 +104,8 @@ YUI.add('entity-details', function() {
                   renderMarkdown={this.props.renderMarkdown}
                   entityModel={entityModel}
                   plans={this.state.plans}
-                  pluralize={this.props.pluralize} />
+                  pluralize={this.props.pluralize}
+                />
               </div>
           );
           break;

@@ -21,6 +21,7 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 YUI.add('entity-header', function() {
 
   juju.components.EntityHeader = React.createClass({
+    displayName: 'EntityHeader',
     /* Define and validate the properites available on this component. */
     propTypes: {
       acl: React.PropTypes.object.isRequired,
@@ -34,7 +35,8 @@ YUI.add('entity-header', function() {
       importBundleYAML: React.PropTypes.func.isRequired,
       plans: React.PropTypes.array,
       pluralize: React.PropTypes.func.isRequired,
-      scrollPosition: React.PropTypes.number.isRequired
+      scrollPosition: React.PropTypes.number.isRequired,
+      urllib: React.PropTypes.func.isRequired
     },
 
     /**
@@ -258,6 +260,61 @@ YUI.add('entity-header', function() {
         </li>);
     },
 
+    /**
+      Generate a link to the latest revision of this entity in the case we are
+      not already in the most recent one.
+
+      @return {Object} A react "li" element for the revision link or null.
+    */
+    _generateLatestRevision: function() {
+      const props = this.props;
+      const entity = props.entityModel;
+      const revisions = entity.get('revisions');
+      if (!revisions || !revisions.length) {
+        // Revisions information is not available.
+        console.warn('revision information is not available');
+        return null;
+      }
+      const lastRevision = revisions[0];
+      if (lastRevision === entity.get('id')) {
+        // We already are at the last revision.
+        return null;
+      }
+      const url = props.urllib.fromLegacyString(lastRevision);
+      return (
+        <li key={lastRevision} className="entity-header__series link"
+            onClick={this._onLastRevisionClick}>
+          Latest revision ({url.revision})
+        </li>
+      );
+    },
+
+    /**
+      Change the state to go to the last revision of this charm/bundle.
+
+      @param {Object} evt The click event.
+    */
+    _onLastRevisionClick: function(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      const props = this.props;
+      const revisions = props.entityModel.get('revisions');
+      const url = props.urllib.fromLegacyString(revisions[0]);
+      props.changeState({store: url.path()});
+    },
+
+    /**
+      Change the state to go to the charm/bundle owner.
+
+      @param {Object} evt The click event.
+    */
+    _onOwnerClick: function(evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      const props = this.props;
+      const entity = props.entityModel;
+      props.changeState({store: null, profile: entity.get('owner')});
+    },
 
     /**
       Generates the list of series. Supports bundles, multi-series and
@@ -296,15 +353,14 @@ YUI.add('entity-header', function() {
     },
 
     render: function() {
-      var entity = this.props.entityModel.toEntity();
-      var ownerUrl = 'https://launchpad.net/~' + entity.owner;
-      var twitterUrl = [
+      const entity = this.props.entityModel.toEntity();
+      const twitterUrl = [
         'https://twitter.com/intent/tweet?text=',
         entity.displayName,
         '%20charm&via=ubuntu_cloud&url=',
         this._getStoreURL(entity)
       ].join('');
-      var googlePlusUrl = [
+      const googlePlusUrl = [
         'https://plus.google.com/share?url=',
         this._getStoreURL(entity)
       ].join('');
@@ -328,10 +384,12 @@ YUI.add('entity-header', function() {
                 </h1>
                 <ul className="bullets inline entity-header__properties">
                   <li className="entity-header__by">
-                    By{' '}
-                    <a href={ownerUrl} className="link"
-                      target="_blank">{entity.owner}</a>
+                    By&nbsp;
+                    <span className="link" onClick={this._onOwnerClick}>
+                      {entity.owner}
+                    </span>
                   </li>
+                  {this._generateLatestRevision()}
                   {this._generateSeriesList()}
                   {this._generateCounts()}
                   {this._generateChannelList()}
